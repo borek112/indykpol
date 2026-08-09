@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1785961433884,
+      "tag": "0000_amusing_deadpool",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1785963982761,
+      "tag": "0001_military_spencer_smythe",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785965706797,
+      "tag": "0002_fearless_slipstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1785977248059,
+      "tag": "0003_new_grandmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1786135611410,
+      "tag": "0004_faithful_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1786225000000,
+      "tag": "0005_feed_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1786227000000,
+      "tag": "0006_health_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1786229000000,
+      "tag": "0007_production_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1786231000000,
+      "tag": "0008_warehouse_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1786233000000,
+      "tag": "0009_economics_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1786235000000,
+      "tag": "0010_iot_intelligence",
+      "breakpoints": true
+    }
+  ]
+}
