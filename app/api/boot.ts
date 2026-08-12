@@ -137,10 +137,19 @@ export default app;
 if (env.isProduction) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
-  serveStaticFiles(app);
-
-  const port = parseInt(process.env.PORT || "3000");
-  serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-  });
+  serveStaticFiles(app);const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 3000);
+  
+serve({
+  fetch: app.fetch,
+  port,
+  hostname: "0.0.0.0",
+}, (info) => {
+  console.log(`Server running on 0.0.0.0:${info.port}`);
+});
 }
+  
+  
+
+  
+
