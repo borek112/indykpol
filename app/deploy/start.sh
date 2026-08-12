@@ -2,7 +2,8 @@
 set -e
 
 echo "== Bloody Turkey Enterprise — start =="
-
+echo "DATABASE_URL present: ${DATABASE_URL:+YES}"
+echo "NODE_ENV: ${NODE_ENV:-NOT_SET}"
 echo ">> Migracje bazy danych..."
 npx tsx db/migrate-all.ts
 
