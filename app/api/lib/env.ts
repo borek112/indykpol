@@ -2,14 +2,40 @@ import fs from "fs";
 import path from "path";
 import * as dotenv from "dotenv";
 
+/*
+ * Bloody Turkey Enterprise
+ *
+ * Kolejność:
+ * 1. prawdziwe zmienne środowiskowe Railway
+ * 2. lokalny .env
+ * 3. .env.preview
+ *
+ * DATABASE_URL / MYSQL_URL nie są wymagane.
+ * Połączenie z MySQL budujemy z:
+ *
+ * MYSQLHOST
+ * MYSQLPORT
+ * MYSQLUSER
+ * MYSQLPASSWORD
+ * MYSQLDATABASE
+ */
+
 const cwd = process.cwd();
 
 if (fs.existsSync(path.join(cwd, ".env"))) {
-  dotenv.config({ path: path.join(cwd, ".env") });
+  dotenv.config({
+    path: path.join(cwd, ".env"),
+  });
 } else if (fs.existsSync(path.join(cwd, ".env.preview"))) {
-  dotenv.config({ path: path.join(cwd, ".env.preview") });
+  dotenv.config({
+    path: path.join(cwd, ".env.preview"),
+  });
 }
 
+/**
+ * Zmienna opcjonalna.
+ * Brak zmiennej nie zatrzymuje aplikacji.
+ */
 function optional(name: string, fallback = ""): string {
   const value = process.env[name];
 
@@ -22,22 +48,17 @@ function optional(name: string, fallback = ""): string {
   return value ?? fallback;
 }
 
-/*
- * Railway MySQL:
+/**
+ * Budowanie URL MySQL bez DATABASE_URL.
+ *
+ * Railway przekazuje dane MySQL osobno:
  * MYSQLHOST
  * MYSQLPORT
  * MYSQLUSER
  * MYSQLPASSWORD
  * MYSQLDATABASE
- *
- * DATABASE_URL nie jest już wymagane.
  */
-
 function buildMysqlUrl(): string {
-  if (process.env.MYSQL_URL) {
-    return process.env.MYSQL_URL;
-  }
-
   const host = process.env.MYSQLHOST;
   const port = process.env.MYSQLPORT || "3306";
   const user = process.env.MYSQLUSER;
@@ -48,11 +69,18 @@ function buildMysqlUrl(): string {
     return "";
   }
 
-  return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
+  return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(
+    password,
+  )}@${host}:${port}/${database}`;
 }
 
+/**
+ * Zmienne środowiskowe aplikacji.
+ */
 export const env = {
-  // Kimi OAuth
+  /*
+   * Kimi OAuth
+   */
   appId: optional("APP_ID"),
 
   appSecret: optional(
@@ -60,22 +88,48 @@ export const env = {
     process.env.JWT_SECRET || "bloody-turkey-dev-secret",
   ),
 
+  /*
+   * Środowisko
+   */
   isProduction: process.env.NODE_ENV === "production",
 
-  // MySQL — DATABASE_URL nie jest wymagane
+  /*
+   * MySQL
+   *
+   * DATABASE_URL nie jest wymagane.
+   */
   databaseUrl: buildMysqlUrl(),
 
+  /*
+   * Kimi
+   */
   kimiAuthUrl: optional("KIMI_AUTH_URL"),
+
   kimiOpenUrl: optional("KIMI_OPEN_URL"),
 
+  /*
+   * Właściciel / użytkownik
+   */
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
 
+  /*
+   * Upload plików
+   */
   uploadDir:
-    process.env.UPLOAD_DIR ?? "/mnt/agents/output/uploads",
+    process.env.UPLOAD_DIR ??
+    "/mnt/agents/output/uploads",
 
-  // Przydatne diagnostycznie
+  /*
+   * Bezpośrednie zmienne MySQL.
+   *
+   * Są również dostępne w env,
+   * gdy inne moduły będą ich potrzebowały.
+   */
   mysqlHost: process.env.MYSQLHOST ?? "",
+
   mysqlPort: process.env.MYSQLPORT ?? "3306",
+
   mysqlUser: process.env.MYSQLUSER ?? "",
+
   mysqlDatabase: process.env.MYSQLDATABASE ?? "",
 };
