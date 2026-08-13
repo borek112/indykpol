@@ -78,6 +78,13 @@
       "when": 1786235000000,
       "tag": "0010_iot_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1786646824213,
+      "tag": "0011_colossal_cyclops",
+      "breakpoints": true
     }
   ]
 }
