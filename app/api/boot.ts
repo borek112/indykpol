@@ -138,7 +138,6 @@ if (env.isProduction) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
   serveStaticFiles(app);const port = Number(process.env.PORT || 3000);
-const port = Number(process.env.PORT || 3000);
   
 serve({
   fetch: app.fetch,
