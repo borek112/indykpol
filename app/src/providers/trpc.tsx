@@ -8,12 +8,15 @@ import type { ReactNode } from "react";
 export const trpc = createTRPCReact<AppRouter>();
 
 const queryClient = new QueryClient();
+const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+const trpcUrl = apiBaseUrl
+  ? new URL("/api/trpc", `${apiBaseUrl}/`).toString()
+  : "/api/trpc";
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      // Na wspólnym serwerze (Railway/Render/VPS) zostaje "/api/trpc".
-      // Gdy frontend jest na Netlify, a backend gdzie indziej, ustaw VITE_API_URL=https://twoj-backend.../api/trpc
-      url: (import.meta as any).env?.VITE_API_URL || "/api/trpc",
+      url: trpcUrl,
       transformer: superjson,
       fetch(input, init) {
         return globalThis.fetch(input, {

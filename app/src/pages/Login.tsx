@@ -4,14 +4,13 @@ import { Button } from "@/components/ui/button";
 function getOAuthUrl() {
   const kimiAuthUrl = import.meta.env.VITE_KIMI_AUTH_URL;
   const appID = import.meta.env.VITE_APP_ID;
-  if (!kimiAuthUrl || !appID) {
-    throw new Error("Kimi OAuth is not configured");
+  const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+
+  if (!kimiAuthUrl || !appID || !apiBaseUrl) {
+    throw new Error("Production authentication is not configured");
   }
 
-  const configuredApiUrl = String(import.meta.env.VITE_API_URL || "");
-  const apiOrigin = configuredApiUrl.startsWith("http")
-    ? new URL(configuredApiUrl).origin
-    : window.location.origin;
+  const apiOrigin = new URL(apiBaseUrl).origin;
   const redirectUri = `${apiOrigin}/api/oauth/callback`;
   const state = btoa(redirectUri);
 

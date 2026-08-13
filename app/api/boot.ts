@@ -11,12 +11,54 @@ import { Paths } from "@contracts/constants";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
-app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
-app.use("/api/*", cors({
-  origin: env.frontendUrl || "*",
-  credentials: Boolean(env.frontendUrl),
-}));
-app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+app.use(
+  "/api/*",
+  cors({
+    origin: env.frontendUrl || ((origin) => origin),
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }),
+);
+
+/* =========================================================
+   HEALTHCHECK
+   ========================================================= */
+
+app.get("/health", (c) => {
+  return c.json({
+    status: "ok",
+  });
+});
+
+/* =========================================================
+   BODY LIMIT
+   ========================================================= */
+
+app.use(
+  bodyLimit({
+    maxSize: 50 * 1024 * 1024,
+  }),
+);
+
+/* =========================================================
+   KIMI OAUTH CALLBACK
+   Ładowany dynamicznie, żeby moduł auth/JWKS nie blokował
+   startu całego serwera.
+   ========================================================= */
+
+app.get(Paths.oauthCallback, async (c) => {
+  const { createOAuthCallbackHandler } = await import("./kimi/auth");
+
+  const handler = createOAuthCallbackHandler();
+
+  return handler(c);
+});
+
+/* =========================================================
+  DEV LOGIN
+  Tylko poza production.
+  ========================================================= */
 
 /* DEV-ONLY: lokalne logowanie bez Kimi OAuth — ustawia cookie sesyjne dla użytkownika
    OWNER_UNION_ID z lokalnej bazy. Aktywne wyłącznie poza produkcją (NODE_ENV != production). */
