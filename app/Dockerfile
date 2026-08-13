@@ -17,6 +17,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install --no-audit --no-fund
 COPY . .
+RUN npm run build
 # env ładowane z wersjonowanego .env.preview (fallback w api/lib/env.ts)
 RUN mkdir -p /data/uploads /data/mysql /data/run /data/log
 
