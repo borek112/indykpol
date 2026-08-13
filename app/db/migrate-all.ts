@@ -1,64 +1,54 @@
-/**
- * Bloody Turkey Enterprise
- *
- * Uruchamia wszystkie migracje SQL z db/migrations
- * w kolejności alfabetycznej.
- *
- * Połączenie z Railway MySQL odbywa się bez DATABASE_URL.
- * Używamy bezpośrednio:
- *
- * MYSQLHOST
- * MYSQLPORT
- * MYSQLUSER
- * MYSQLPASSWORD
- * MYSQLDATABASE
- */
-
 import mysql from "mysql2/promise";
 import fs from "fs";
 import path from "path";
 
-async function main() {
-  console.log("=== DATABASE MIGRATION ===");
-
+function getDatabaseUrl(): string {
+  // Railway MySQL
   const host = process.env.MYSQLHOST;
-  const port = Number(process.env.MYSQLPORT || "3306");
+  const port = process.env.MYSQLPORT || "3306";
   const user = process.env.MYSQLUSER;
   const password = process.env.MYSQLPASSWORD;
   const database = process.env.MYSQLDATABASE;
 
-  console.log(`MYSQLHOST present: ${host ? "YES" : "NO"}`);
-  console.log(`MYSQLPORT present: ${process.env.MYSQLPORT ? "YES" : "NO"}`);
-  console.log(`MYSQLUSER present: ${user ? "YES" : "NO"}`);
-  console.log(
-    `MYSQLPASSWORD present: ${password ? "YES" : "NO"}`
-  );
-  console.log(
-    `MYSQLDATABASE present: ${database ? "YES" : "NO"}`
-  );
-
   if (!host || !user || !password || !database) {
     throw new Error(
-      "Brak wymaganych zmiennych MySQL: MYSQLHOST, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD lub MYSQLDATABASE",
+      [
+        "Brak danych MySQL.",
+        `MYSQLHOST=${host ? "OK" : "BRAK"}`,
+        `MYSQLPORT=${port}`,
+        `MYSQLUSER=${user ? "OK" : "BRAK"}`,
+        `MYSQLPASSWORD=${password ? "OK" : "BRAK"}`,
+        `MYSQLDATABASE=${database ? "OK" : "BRAK"}`,
+      ].join(" | "),
     );
   }
 
-  console.log(`Łączenie z MySQL: ${host}:${port}/${database}`);
-
-  const conn = await mysql.createConnection({
-    host,
-    port,
-    user,
+  return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(
     password,
-    database,
-  });
+  )}@${host}:${port}/${database}`;
+}
+
+async function main() {
+  console.log("=== DATABASE DIAGNOSTICS ===");
+
+  const url = getDatabaseUrl();
+
+  console.log("MYSQLHOST: OK");
+  console.log("MYSQLPORT:", process.env.MYSQLPORT || "3306");
+  console.log("MYSQLUSER: OK");
+  console.log("MYSQLPASSWORD: OK");
+  console.log("MYSQLDATABASE: OK");
+
+  console.log(">> Łączenie z MySQL...");
+
+  const conn = await mysql.createConnection(url);
 
   console.log("✓ Połączenie z MySQL działa.");
 
-  const dir = "db/migrations";
+  const dir = path.resolve("db/migrations");
 
   if (!fs.existsSync(dir)) {
-    throw new Error(`Brak katalogu migracji: ${dir}`);
+    throw new Error(`Nie znaleziono katalogu migracji: ${dir}`);
   }
 
   const files = fs
@@ -66,7 +56,7 @@ async function main() {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
-  console.log(`Znaleziono migracji: ${files.length}`);
+  console.log(`>> Znaleziono ${files.length} migracji.`);
 
   for (const file of files) {
     console.log(`>> Migracja: ${file}`);
@@ -76,35 +66,28 @@ async function main() {
       "utf8",
     );
 
-    const stmts = sql
+    const statements = sql
       .split("--> statement-breakpoint")
       .map((s) => s.trim())
       .filter(Boolean);
 
-    for (const st of stmts) {
+    for (const statement of statements) {
       try {
-        await conn.query(st);
+        await conn.query(statement);
       } catch (e: any) {
-        const message = String(e?.message ?? e);
+        const message = String(e?.message || e);
 
-        /*
-         * Migracje są idempotentne.
-         * Nie zatrzymujemy procesu przy obiektach,
-         * które już istnieją.
-         */
         if (
-          /already exists|Duplicate|duplicate key|ER_TABLE_EXISTS_ERROR/i.test(
-            message,
-          )
+          /already exists/i.test(message) ||
+          /Duplicate/i.test(message)
         ) {
-          console.log(
-            `  ↳ pominięto istniejący obiekt: ${message.slice(0, 150)}`,
-          );
+          console.log(`↪ Pominięto istniejący element w ${file}`);
           continue;
         }
 
         console.error(
-          `✗ Błąd w ${file}: ${message.slice(0, 500)}`,
+          `❌ Błąd w ${file}:`,
+          message.slice(0, 500),
         );
 
         throw e;
@@ -114,17 +97,17 @@ async function main() {
     console.log(`✓ ${file}`);
   }
 
-  console.log("================================");
-  console.log("✓ Wszystkie migracje zastosowane.");
-  console.log("================================");
-
   await conn.end();
+
+  console.log("=================================");
+  console.log("✓ Wszystkie migracje zastosowane.");
+  console.log("=================================");
 }
 
 main().catch((e) => {
   console.error(
     "❌ Migracja nieudana:",
-    e?.message ?? e,
+    e?.message || e,
   );
 
   process.exit(1);
