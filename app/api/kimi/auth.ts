@@ -15,6 +15,18 @@ async function exchangeAuthCode(
   code: string,
   redirectUri: string,
 ): Promise<TokenResponse> {
+  if (!env.kimiAuthUrl) {
+    throw new Error(
+      "KIMI_AUTH_URL is not configured. Kimi OAuth is disabled.",
+    );
+  }
+
+  if (!env.appId || !env.appSecret) {
+    throw new Error(
+      "APP_ID or APP_SECRET is not configured. Kimi OAuth is disabled.",
+    );
+  }
+
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -23,51 +35,123 @@ async function exchangeAuthCode(
     client_secret: env.appSecret,
   });
 
-  const resp = await fetch(`${env.kimiAuthUrl}/api/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
+  const resp = await fetch(
+    `${env.kimiAuthUrl}/api/oauth/token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    },
+  );
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Token exchange failed (${resp.status}): ${text}`);
+
+    throw new Error(
+      `Token exchange failed (${resp.status}): ${text}`,
+    );
   }
 
   return resp.json() as Promise<TokenResponse>;
 }
 
-const jwks = jose.createRemoteJWKSet(
-  new URL(`${env.kimiAuthUrl}/api/.well-known/jwks.json`),
-);
+/*
+ * JWKS jest inicjalizowane dopiero wtedy,
+ * gdy rzeczywiście potrzebujemy zweryfikować
+ * token Kimi OAuth.
+ *
+ * Dzięki temu brak KIMI_AUTH_URL nie powoduje
+ * crashu aplikacji podczas startu.
+ */
+let jwks: ReturnType<
+  typeof jose.createRemoteJWKSet
+> | null = null;
+
+function getJwks() {
+  if (!env.kimiAuthUrl) {
+    throw new Error(
+      "KIMI_AUTH_URL is not configured. Kimi OAuth is disabled.",
+    );
+  }
+
+  if (!jwks) {
+    const jwksUrl = new URL(
+      "/api/.well-known/jwks.json",
+      env.kimiAuthUrl,
+    );
+
+    jwks = jose.createRemoteJWKSet(jwksUrl);
+  }
+
+  return jwks;
+}
 
 async function verifyAccessToken(
   accessToken: string,
-): Promise<{ userId: string; clientId: string }> {
-  const { payload } = await jose.jwtVerify(accessToken, jwks);
+): Promise<{
+  userId: string;
+  clientId: string;
+}> {
+  const { payload } = await jose.jwtVerify(
+    accessToken,
+    getJwks(),
+  );
+
   const userId = payload.user_id as string;
   const clientId = payload.client_id as string;
+
   if (!userId) {
-    throw new Error("user_id missing from access token");
+    throw new Error(
+      "user_id missing from access token",
+    );
   }
-  return { userId, clientId };
+
+  return {
+    userId,
+    clientId,
+  };
 }
 
-export async function authenticateRequest(headers: Headers) {
-  const cookies = cookie.parse(headers.get("cookie") || "");
+export async function authenticateRequest(
+  headers: Headers,
+) {
+  const cookies = cookie.parse(
+    headers.get("cookie") || "",
+  );
+
   const token = cookies[Session.cookieName];
+
   if (!token) {
-    console.warn("[auth] No session cookie found in request.");
-    throw Errors.forbidden("Invalid authentication token.");
+    console.warn(
+      "[auth] No session cookie found in request.",
+    );
+
+    throw Errors.forbidden(
+      "Invalid authentication token.",
+    );
   }
+
   const claim = await verifySessionToken(token);
+
   if (!claim) {
-    throw Errors.forbidden("Invalid authentication token.");
+    throw Errors.forbidden(
+      "Invalid authentication token.",
+    );
   }
-  const user = await findUserByUnionId(claim.unionId);
+
+  const user = await findUserByUnionId(
+    claim.unionId,
+  );
+
   if (!user) {
-    throw Errors.forbidden("User not found. Please re-login.");
+    throw Errors.forbidden(
+      "User not found. Please re-login.",
+    );
   }
+
   return user;
 }
 
@@ -76,29 +160,54 @@ export function createOAuthCallbackHandler() {
     const code = c.req.query("code");
     const state = c.req.query("state");
     const error = c.req.query("error");
-    const errorDescription = c.req.query("error_description");
+    const errorDescription =
+      c.req.query("error_description");
 
     if (error) {
       if (error === "access_denied") {
         return c.redirect("/", 302);
       }
+
       return c.json(
-        { error, error_description: errorDescription },
+        {
+          error,
+          error_description: errorDescription,
+        },
         400,
       );
     }
 
     if (!code || !state) {
-      return c.json({ error: "code and state are required" }, 400);
+      return c.json(
+        {
+          error: "code and state are required",
+        },
+        400,
+      );
     }
 
     try {
       const redirectUri = atob(state);
-      const tokenResp = await exchangeAuthCode(code, redirectUri);
-      const { userId } = await verifyAccessToken(tokenResp.access_token);
-      const userProfile = await kimiUsers.getProfile(tokenResp.access_token);
+
+      const tokenResp = await exchangeAuthCode(
+        code,
+        redirectUri,
+      );
+
+      const { userId } =
+        await verifyAccessToken(
+          tokenResp.access_token,
+        );
+
+      const userProfile =
+        await kimiUsers.getProfile(
+          tokenResp.access_token,
+        );
+
       if (!userProfile) {
-        throw new Error("Failed to fetch user profile from Kimi Open");
+        throw new Error(
+          "Failed to fetch user profile from Kimi Open",
+        );
       }
 
       await upsertUser({
@@ -113,18 +222,40 @@ export function createOAuthCallbackHandler() {
         clientId: env.appId,
       });
 
-      const cookieOpts = getSessionCookieOptions(c.req.raw.headers);
-      setCookie(c, Session.cookieName, token, {
-        ...cookieOpts,
-        maxAge: Session.maxAgeMs / 1000,
-      });
+      const cookieOpts =
+        getSessionCookieOptions(
+          c.req.raw.headers,
+        );
+
+      setCookie(
+        c,
+        Session.cookieName,
+        token,
+        {
+          ...cookieOpts,
+          maxAge:
+            Session.maxAgeMs / 1000,
+        },
+      );
 
       return c.redirect("/", 302);
     } catch (error) {
-      console.error("[OAuth] Callback failed", error);
-      return c.json({ error: "OAuth callback failed" }, 500);
+      console.error(
+        "[OAuth] Callback failed",
+        error,
+      );
+
+      return c.json(
+        {
+          error: "OAuth callback failed",
+        },
+        500,
+      );
     }
   };
 }
 
-export { exchangeAuthCode, verifyAccessToken };
+export {
+  exchangeAuthCode,
+  verifyAccessToken,
+};
