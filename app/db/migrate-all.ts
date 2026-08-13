@@ -1,6 +1,17 @@
 /**
- * Zastosuj wszystkie migracje SQL z db/migrations.
- * Diagnostyka DATABASE_URL bez ujawniania hasła.
+ * Bloody Turkey Enterprise
+ *
+ * Uruchamia wszystkie migracje SQL z db/migrations
+ * w kolejności alfabetycznej.
+ *
+ * Połączenie z Railway MySQL odbywa się bez DATABASE_URL.
+ * Używamy bezpośrednio:
+ *
+ * MYSQLHOST
+ * MYSQLPORT
+ * MYSQLUSER
+ * MYSQLPASSWORD
+ * MYSQLDATABASE
  */
 
 import mysql from "mysql2/promise";
@@ -8,47 +19,46 @@ import fs from "fs";
 import path from "path";
 
 async function main() {
-  console.log("=== DATABASE DIAGNOSTICS ===");
-  console.log("cwd:", process.cwd());
-  console.log("NODE_ENV:", process.env.NODE_ENV ?? "(brak)");
+  console.log("=== DATABASE MIGRATION ===");
 
-  const databaseUrl = process.env.DATABASE_URL;
-  const mysqlUrl = process.env.MYSQL_URL;
+  const host = process.env.MYSQLHOST;
+  const port = Number(process.env.MYSQLPORT || "3306");
+  const user = process.env.MYSQLUSER;
+  const password = process.env.MYSQLPASSWORD;
+  const database = process.env.MYSQLDATABASE;
 
+  console.log(`MYSQLHOST present: ${host ? "YES" : "NO"}`);
+  console.log(`MYSQLPORT present: ${process.env.MYSQLPORT ? "YES" : "NO"}`);
+  console.log(`MYSQLUSER present: ${user ? "YES" : "NO"}`);
   console.log(
-    "DATABASE_URL:",
-    databaseUrl ? `PRESENT (${databaseUrl.length} chars)` : "MISSING"
+    `MYSQLPASSWORD present: ${password ? "YES" : "NO"}`
+  );
+  console.log(
+    `MYSQLDATABASE present: ${database ? "YES" : "NO"}`
   );
 
-  console.log(
-    "MYSQL_URL:",
-    mysqlUrl ? `PRESENT (${mysqlUrl.length} chars)` : "MISSING"
-  );
-
-  console.log(
-    "DATABASE_URL starts with:",
-    databaseUrl ? databaseUrl.substring(0, 10) + "..." : "(brak)"
-  );
-
-  console.log(
-    "MYSQL_URL starts with:",
-    mysqlUrl ? mysqlUrl.substring(0, 10) + "..." : "(brak)"
-  );
-
-  // Na tym etapie używamy wyłącznie DATABASE_URL.
-  // MYSQL_URL pokazujemy tylko diagnostycznie.
-  if (!databaseUrl) {
+  if (!host || !user || !password || !database) {
     throw new Error(
-      "Brak DATABASE_URL w procesie migracji. Railway nie przekazał zmiennej do kontenera."
+      "Brak wymaganych zmiennych MySQL: MYSQLHOST, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD lub MYSQLDATABASE",
     );
   }
 
-  const dir = path.resolve(process.cwd(), "db/migrations");
+  console.log(`Łączenie z MySQL: ${host}:${port}/${database}`);
 
-  console.log("Migration directory:", dir);
+  const conn = await mysql.createConnection({
+    host,
+    port,
+    user,
+    password,
+    database,
+  });
+
+  console.log("✓ Połączenie z MySQL działa.");
+
+  const dir = "db/migrations";
 
   if (!fs.existsSync(dir)) {
-    throw new Error(`Nie znaleziono katalogu migracji: ${dir}`);
+    throw new Error(`Brak katalogu migracji: ${dir}`);
   }
 
   const files = fs
@@ -58,52 +68,64 @@ async function main() {
 
   console.log(`Znaleziono migracji: ${files.length}`);
 
-  if (files.length === 0) {
-    console.log("Brak plików SQL do wykonania.");
-    return;
-  }
+  for (const file of files) {
+    console.log(`>> Migracja: ${file}`);
 
-  const conn = await mysql.createConnection(databaseUrl);
+    const sql = fs.readFileSync(
+      path.join(dir, file),
+      "utf8",
+    );
 
-  try {
-    for (const file of files) {
-      console.log(`>> Wykonuję ${file}`);
+    const stmts = sql
+      .split("--> statement-breakpoint")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-      const sql = fs.readFileSync(path.join(dir, file), "utf8");
+    for (const st of stmts) {
+      try {
+        await conn.query(st);
+      } catch (e: any) {
+        const message = String(e?.message ?? e);
 
-      const statements = sql
-        .split("--> statement-breakpoint")
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      for (const statement of statements) {
-        try {
-          await conn.query(statement);
-        } catch (e: any) {
-          const message = String(e?.message ?? e);
-
-          if (/already exists|Duplicate/i.test(message)) {
-            console.log(`↪ Pomijam istniejący element w ${file}`);
-            continue;
-          }
-
-          console.error(`❌ Błąd w ${file}:`, message.slice(0, 500));
-          throw e;
+        /*
+         * Migracje są idempotentne.
+         * Nie zatrzymujemy procesu przy obiektach,
+         * które już istnieją.
+         */
+        if (
+          /already exists|Duplicate|duplicate key|ER_TABLE_EXISTS_ERROR/i.test(
+            message,
+          )
+        ) {
+          console.log(
+            `  ↳ pominięto istniejący obiekt: ${message.slice(0, 150)}`,
+          );
+          continue;
         }
-      }
 
-      console.log(`✓ ${file}`);
+        console.error(
+          `✗ Błąd w ${file}: ${message.slice(0, 500)}`,
+        );
+
+        throw e;
+      }
     }
 
-    console.log("=================================");
-    console.log("✓ Wszystkie migracje zastosowane.");
-    console.log("=================================");
-  } finally {
-    await conn.end();
+    console.log(`✓ ${file}`);
   }
+
+  console.log("================================");
+  console.log("✓ Wszystkie migracje zastosowane.");
+  console.log("================================");
+
+  await conn.end();
 }
 
 main().catch((e) => {
-  console.error("❌ Migracja nieudana:", e?.message ?? e);
+  console.error(
+    "❌ Migracja nieudana:",
+    e?.message ?? e,
+  );
+
   process.exit(1);
 });
