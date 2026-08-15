@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1786762698264,
+      "tag": "0000_full_schema_sync",
+      "breakpoints": true
+    }
+  ]
+}
