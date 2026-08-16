@@ -34,3 +34,6 @@ coverage/
 tmp/
 .temp/
 *.tar.gz
+
+# Legacy nested repository kept locally; the main deployable app is ./app
+bloody-turkey-kimi/
