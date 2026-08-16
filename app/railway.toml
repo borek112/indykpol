@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.production"
 
 [deploy]
 startCommand = "sh deploy/start.sh"

@@ -8,7 +8,11 @@ function getOAuthUrl() {
     throw new Error("Kimi OAuth is not configured");
   }
 
-  const redirectUri = `${window.location.origin}/api/oauth/callback`;
+  const configuredApiUrl = String(import.meta.env.VITE_API_URL || "");
+  const apiOrigin = configuredApiUrl.startsWith("http")
+    ? new URL(configuredApiUrl).origin
+    : window.location.origin;
+  const redirectUri = `${apiOrigin}/api/oauth/callback`;
   const state = btoa(redirectUri);
 
   const url = new URL(`${kimiAuthUrl}/api/oauth/authorize`);

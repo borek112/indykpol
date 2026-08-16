@@ -38,4 +38,5 @@ export const env = {
   kimiOpenUrl: optional("KIMI_OPEN_URL"),
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
   uploadDir: process.env.UPLOAD_DIR ?? "/mnt/agents/output/uploads",
+  frontendUrl: optional("FRONTEND_URL", process.env.CORS_ORIGIN ?? ""),
 };

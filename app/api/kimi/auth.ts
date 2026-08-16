@@ -119,7 +119,7 @@ export function createOAuthCallbackHandler() {
 
     if (error) {
       if (error === "access_denied") {
-        return c.redirect("/", 302);
+        return c.redirect(env.frontendUrl || "/", 302);
       }
       return c.json(
         { error, error_description: errorDescription },
@@ -158,7 +158,7 @@ export function createOAuthCallbackHandler() {
         maxAge: Session.maxAgeMs / 1000,
       });
 
-      return c.redirect("/", 302);
+      return c.redirect(env.frontendUrl || "/", 302);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       return c.json({ error: "OAuth callback failed" }, 500);

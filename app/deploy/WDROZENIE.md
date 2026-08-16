@@ -17,6 +17,8 @@ Kompletna instrukcja publikacji pełnej wersji (frontend + API + MySQL).
 |---|---|---|
 | `DATABASE_URL` | ✅ | np. `mysql://user:haslo@host:3306/bloody_turkey` |
 | `JWT_SECRET` | ✅ | dowolny długi losowy ciąg (Render wygeneruje sam) |
+| `NODE_ENV` | ✅ | `production` — bez tego API nie uruchomi listenera |
+| `FRONTEND_URL` | ✅ przy osobnym Netlify | pełny adres Netlify, np. `https://bloody-turkey.netlify.app` |
 | `SEED_DEMO` | — | `true` przy pierwszym starze = dane demonstracyjne; potem zmień na `false` |
 | `UPLOAD_DIR` | — | domyślnie `/data/uploads` (Render) — katalog na wgrywane pliki |
 | `PORT` | — | platforma ustawia sama |
@@ -34,7 +36,7 @@ Zmienne `APP_ID` / `KIMI_AUTH_URL` itd. są **opcjonalne** — bez nich działa 
    - `DATABASE_URL` → „Reference variable" wskazująca na `DATABASE_URL` z usługi MySQL (Railway poda też `MYSQL_URL`),
    - `JWT_SECRET` → losowy ciąg,
    - `SEED_DEMO=true`.
-5. Plik `railway.toml` w repo zadba o build z Dockerfile, healthcheck i restart policy.
+5. Plik `railway.toml` w repo zadba o build z `Dockerfile.production`, healthcheck i restart policy.
 6. Po deployu Railway da Ci publiczny adres `https://xxx.up.railway.app` (Settings → Networking → Generate Domain).
 7. **Po pierwszym udanym starcie** zmień `SEED_DEMO=false` i zrób redeploy — inaczej seed będzie próbował się ładować przy każdym restarcie (skrypty są odporne, ale start trwa dłużej).
 
@@ -42,7 +44,7 @@ Zmienne `APP_ID` / `KIMI_AUTH_URL` itd. są **opcjonalne** — bez nich działa 
 
 1. Utwórz bazę MySQL poza Renderem (PlanetScale/Aiven) i skopiuj connection string.
 2. Na render.com: **New → Blueprint** i wskaż repo — Render odczyta `render.yaml` i utworzy usługę z dyskiem na uploady.
-3. W panelu usługi uzupełnij tylko `DATABASE_URL` (reszta jest w `render.yaml`).
+3. W panelu usługi uzupełnij `DATABASE_URL` oraz `FRONTEND_URL` (reszta jest w `render.yaml`).
 4. Adres publiczny: `https://bloody-turkey.onrender.com`.
 5. Uwaga: darmowy plan Render „usypia" po bezczynności — pierwsze wejście może potrwać ~30 s.
 
@@ -51,9 +53,11 @@ Zmienne `APP_ID` / `KIMI_AUTH_URL` itd. są **opcjonalne** — bez nich działa 
 ## Weryfikacja po wdrożeniu
 
 ```bash
-curl https://TWOJ-ADRES/                                  # powinno zwrócić 200 (strona)
-curl "https://TWOJ-ADRES/api/trpc/farm.feed.recipes?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%7D%7D"
-# powinno zwrócić JSON z recepturami (gdy SEED_DEMO=true)
+curl -i https://TWOJ-ADRES/                              # oczekiwane: 200
+curl -i https://TWOJ-ADRES/api/trpc/ping                 # oczekiwane: 200 i ok=true
+curl -i -X OPTIONS https://TWOJ-ADRES/api/trpc/ping \
+   -H "Origin: https://TWOJ-FRONTEND.netlify.app" \
+   -H "Access-Control-Request-Method: GET"              # oczekiwane: Access-Control-Allow-Origin
 ```
 
 ## Aktualizacje

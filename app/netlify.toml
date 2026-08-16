@@ -9,7 +9,7 @@
 [build.environment]
   # Adres API backendu, np. https://bloody-turkey.up.railway.app/api/trpc
   # Ustaw wygodniej w panelu: Site settings → Environment variables
-  # VITE_API_URL = ""
+  # VITE_API_URL = "https://bloody-turkey.up.railway.app/api/trpc"
 
 # SPA — wszystkie ścieżki kieruj do index.html (routing po stronie Reacta)
 [[redirects]]
