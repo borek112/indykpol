@@ -9,9 +9,14 @@ export const trpc = createTRPCReact<AppRouter>();
 
 const queryClient = new QueryClient();
 const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
-const trpcUrl = apiBaseUrl
-  ? new URL("/api/trpc", `${apiBaseUrl}/`).toString()
-  : "/api/trpc";
+let trpcUrl = "/api/trpc";
+if (apiBaseUrl) {
+  try {
+    trpcUrl = new URL("/api/trpc", `${apiBaseUrl}/`).toString();
+  } catch {
+    console.error("Invalid VITE_API_URL; falling back to the local API path.");
+  }
+}
 
 const trpcClient = trpc.createClient({
   links: [
