@@ -16,14 +16,14 @@ Kompletna instrukcja publikacji pełnej wersji (frontend + API + MySQL).
 | Zmienna | Wymagana | Opis |
 |---|---|---|
 | `DATABASE_URL` | ✅ | np. `mysql://user:haslo@host:3306/bloody_turkey` |
-| `JWT_SECRET` | ✅ | dowolny długi losowy ciąg (Render wygeneruje sam) |
+| `SESSION_SECRET` | ✅ | długi losowy sekret tylko po stronie backendu |
 | `NODE_ENV` | ✅ | `production` — bez tego API nie uruchomi listenera |
 | `FRONTEND_URL` | ✅ przy osobnym Netlify | pełny adres Netlify, np. `https://bloody-turkey.netlify.app` |
 | `SEED_DEMO` | — | `true` przy pierwszym starze = dane demonstracyjne; potem zmień na `false` |
 | `UPLOAD_DIR` | — | domyślnie `/data/uploads` (Render) — katalog na wgrywane pliki |
 | `PORT` | — | platforma ustawia sama |
 
-Zmienne `APP_ID` / `KIMI_AUTH_URL` itd. są **opcjonalne** — bez nich działa cały system poza logowaniem Kimi OAuth.
+Kimi OAuth nie jest używany. Netlify potrzebuje wyłącznie publicznego `VITE_API_URL`; sekretów sesji ani bazy nie wolno tam umieszczać.
 
 ---
 

@@ -15,6 +15,7 @@ import { productionIntelRouter } from "./production-intel-router";
 import { warehouseIntelRouter } from "./warehouse-intel-router";
 import { economicsIntelRouter } from "./economics-intel-router";
 import { iotIntelRouter } from "./iot-intel-router";
+import { predictionRouter } from "./prediction-router";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -37,6 +38,7 @@ export const appRouter = createRouter({
   warehouseIntel: warehouseIntelRouter,
   economicsIntel: economicsIntelRouter,
   iotIntel: iotIntelRouter,
+  prediction: predictionRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import type { HttpBindings } from "@hono/node-server";
@@ -6,8 +7,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
-import { createOAuthCallbackHandler } from "./kimi/auth";
-import { Paths } from "@contracts/constants";
+import { registerAuthRoutes } from "./auth/routes";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -41,45 +41,57 @@ app.use(
   }),
 );
 
-/* =========================================================
-   KIMI OAUTH CALLBACK
-   Ładowany dynamicznie, żeby moduł auth/JWKS nie blokował
-   startu całego serwera.
-   ========================================================= */
+registerAuthRoutes(app);
 
-app.get(Paths.oauthCallback, async (c) => {
-  const { createOAuthCallbackHandler } = await import("./kimi/auth");
+async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, companyId: number, identity: string, name: string) {
+  const { establishSession } = await import("./auth/local");
+  const { findUserByUnionId } = await import("./queries/users");
+  const { getDb } = await import("./queries/connection");
+  const { companies, users } = await import("@db/schema");
+  const { eq } = await import("drizzle-orm");
+  const db = getDb();
+  const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+  if (!company) return null;
+  let user = await findUserByUnionId(identity);
+  if (!user) {
+    const [{ id }] = await db.insert(users).values({
+      unionId: identity,
+      name,
+      role: "user",
+      companyId,
+    }).$returningId();
+    [user] = await db.select().from(users).where(eq(users.id, id));
+  }
+  await establishSession(c, user);
+  return user;
+}
 
-  const handler = createOAuthCallbackHandler();
-
-  return handler(c);
-});
+if (env.demoMode) {
+  app.get("/api/demo-login", async (c) => {
+    if (!env.demoCompanyId) return c.json({ error: "DEMO_NOT_CONFIGURED" }, 503);
+    const user = await establishDemoSession(c, env.demoCompanyId, "public-demo", "Public Demo");
+    if (!user) return c.json({ error: "DEMO_COMPANY_NOT_FOUND" }, 503);
+    return c.redirect(env.frontendUrl || "/", 302);
+  });
+}
 
 /* =========================================================
   DEV LOGIN
   Tylko poza production.
   ========================================================= */
 
-/* DEV-ONLY: lokalne logowanie bez Kimi OAuth — ustawia cookie sesyjne dla użytkownika
-   OWNER_UNION_ID z lokalnej bazy. Aktywne wyłącznie poza produkcją (NODE_ENV != production). */
+/* DEV-ONLY: lokalne logowanie dla istniejącego użytkownika. */
 if (!env.isProduction) {
   app.get("/api/dev-login", async (c) => {
-    const { signSessionToken } = await import("./kimi/session");
-    const { findUserByUnionId } = await import("./queries/users");
-    const { setCookie } = await import("hono/cookie");
-    const { getSessionCookieOptions } = await import("./lib/cookies");
-    const fallbackUnionId = env.ownerUnionId || "dev-owner";
-
-    let unionId = fallbackUnionId;
-    try {
-      const user = await findUserByUnionId(fallbackUnionId);
-      if (user?.unionId) unionId = user.unionId;
-    } catch (error) {
-      console.warn("[dev-login] DB lookup failed; using fallback dev session:", error);
-    }
-
-    const token = await signSessionToken({ unionId, clientId: env.appId });
-    setCookie(c, "kimi_sid", token, getSessionCookieOptions(c.req.raw.headers));
+    const { getDb } = await import("./queries/connection");
+    const { companies } = await import("@db/schema");
+    const db = getDb();
+    const [company] = await db.select().from(companies).limit(1);
+    const companyId = company?.id ?? (await db.insert(companies).values({
+        name: "Bloody Turkey Demo",
+        countryCode: "PL",
+    }).$returningId())[0].id;
+    await establishDemoSession(c, companyId, env.ownerUnionId || "dev-owner", "Local Demo");
     return c.redirect("/");
   });
 }

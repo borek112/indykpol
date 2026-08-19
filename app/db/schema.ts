@@ -11,6 +11,8 @@ import {
   boolean,
   date,
   json,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
@@ -19,6 +21,8 @@ export const users = mysqlTable("users", {
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  sessionVersion: int("sessionVersion").notNull().default(1),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1691,3 +1695,149 @@ export const iotAiPredictions = mysqlTable("iot_ai_predictions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type IotAiPrediction = typeof iotAiPredictions.$inferSelect;
+
+/* ============================================================
+   PREDICTION ENGINE — wersjonowane dane wejściowe i wyniki.
+   Tabele źródłowe pozostają kanoniczne; batch_day_facts jest
+   idempotentną projekcją ich stanu na koniec dnia.
+   ============================================================ */
+
+export const batchDayFacts = mysqlTable("batch_day_facts", {
+  id: serial("id").primaryKey(),
+  companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
+  farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
+  houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
+  batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
+  day: date("day", { mode: "string" }).notNull(),
+  ageDays: int("ageDays").notNull(),
+  birdCount: int("birdCount").notNull(),
+  avgWeightG: int("avgWeightG"),
+  adgG: decimal("adgG", { precision: 9, scale: 3 }),
+  feedKg: decimal("feedKg", { precision: 12, scale: 3 }).notNull().default("0"),
+  cumulativeFeedKg: decimal("cumulativeFeedKg", { precision: 12, scale: 3 }).notNull().default("0"),
+  mortality: int("mortality").notNull().default(0),
+  cumulativeMortality: int("cumulativeMortality").notNull().default(0),
+  fcr: decimal("fcr", { precision: 9, scale: 4 }),
+  biomassKg: decimal("biomassKg", { precision: 12, scale: 3 }),
+  waterLiters: decimal("waterLiters", { precision: 12, scale: 3 }),
+  tempC: decimal("tempC", { precision: 6, scale: 2 }),
+  humidityPct: decimal("humidityPct", { precision: 6, scale: 2 }),
+  co2Ppm: int("co2Ppm"),
+  ammoniaPpm: decimal("ammoniaPpm", { precision: 8, scale: 2 }),
+  inputSnapshot: json("inputSnapshot").notNull(),
+  sourceWatermark: timestamp("sourceWatermark").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("batch_day_facts_batch_day_unique").on(table.batchId, table.day),
+  index("batch_day_facts_company_day_idx").on(table.companyId, table.day),
+  index("batch_day_facts_house_day_idx").on(table.houseId, table.day),
+]);
+
+export const predictionRules = mysqlTable("prediction_rules", {
+  id: serial("id").primaryKey(),
+  companyId: bigint("companyId", { mode: "number", unsigned: true }),
+  code: varchar("code", { length: 64 }).notNull(),
+  version: varchar("version", { length: 32 }).notNull(),
+  domain: varchar("domain", { length: 64 }).notNull().default("production"),
+  inputContract: json("inputContract").notNull(),
+  thresholds: json("thresholds").notNull(),
+  logic: json("logic"),
+  source: varchar("source", { length: 255 }).notNull(),
+  author: varchar("author", { length: 255 }).notNull(),
+  effectiveFrom: date("effectiveFrom", { mode: "string" }).notNull(),
+  effectiveTo: date("effectiveTo", { mode: "string" }),
+  status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("prediction_rules_scope_code_version_unique").on(table.companyId, table.code, table.version),
+  index("prediction_rules_status_effective_idx").on(table.status, table.effectiveFrom),
+]);
+
+export const referenceCurves = mysqlTable("reference_curves", {
+  id: serial("id").primaryKey(),
+  companyId: bigint("companyId", { mode: "number", unsigned: true }),
+  geneticLineId: bigint("geneticLineId", { mode: "number", unsigned: true }),
+  geneticLine: varchar("geneticLine", { length: 128 }),
+  sex: mysqlEnum("sex", ["toms", "hens", "mixed"]).notNull(),
+  ageDays: int("ageDays").notNull(),
+  targetWeightG: int("targetWeightG"),
+  targetAdgG: decimal("targetAdgG", { precision: 9, scale: 3 }),
+  targetFcr: decimal("targetFcr", { precision: 9, scale: 4 }),
+  targetFeedKg: decimal("targetFeedKg", { precision: 12, scale: 3 }),
+  targetMortalityPct: decimal("targetMortalityPct", { precision: 7, scale: 4 }),
+  tempMinC: decimal("tempMinC", { precision: 6, scale: 2 }),
+  tempMaxC: decimal("tempMaxC", { precision: 6, scale: 2 }),
+  humidityMinPct: decimal("humidityMinPct", { precision: 6, scale: 2 }),
+  humidityMaxPct: decimal("humidityMaxPct", { precision: 6, scale: 2 }),
+  co2MaxPpm: int("co2MaxPpm"),
+  ammoniaMaxPpm: decimal("ammoniaMaxPpm", { precision: 8, scale: 2 }),
+  source: varchar("source", { length: 255 }).notNull(),
+  version: varchar("version", { length: 32 }).notNull(),
+  author: varchar("author", { length: 255 }).notNull(),
+  effectiveFrom: date("effectiveFrom", { mode: "string" }).notNull(),
+  effectiveTo: date("effectiveTo", { mode: "string" }),
+  status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("reference_curves_scope_age_version_unique").on(table.companyId, table.geneticLine, table.sex, table.ageDays, table.version),
+  index("reference_curves_lookup_idx").on(table.status, table.sex, table.ageDays, table.effectiveFrom),
+]);
+
+export const predictionRuns = mysqlTable("prediction_runs", {
+  id: serial("id").primaryKey(),
+  companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
+  batchId: bigint("batchId", { mode: "number", unsigned: true }),
+  houseId: bigint("houseId", { mode: "number", unsigned: true }),
+  ruleId: bigint("ruleId", { mode: "number", unsigned: true }),
+  ruleVersion: varchar("ruleVersion", { length: 32 }).notNull(),
+  curveId: bigint("curveId", { mode: "number", unsigned: true }),
+  curveVersion: varchar("curveVersion", { length: 32 }),
+  asOf: timestamp("asOf").notNull(),
+  inputSnapshot: json("inputSnapshot").notNull(),
+  output: json("output").notNull(),
+  confidence: decimal("confidence", { precision: 5, scale: 4 }).notNull(),
+  status: mysqlEnum("status", ["completed", "invalid", "superseded"]).notNull().default("completed"),
+  sourceWatermark: timestamp("sourceWatermark").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("prediction_runs_company_batch_asof_idx").on(table.companyId, table.batchId, table.asOf),
+  index("prediction_runs_rule_created_idx").on(table.ruleId, table.createdAt),
+]);
+
+export const predictionFindings = mysqlTable("prediction_findings", {
+  id: serial("id").primaryKey(),
+  predictionRunId: bigint("predictionRunId", { mode: "number", unsigned: true }).notNull(),
+  companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
+  batchId: bigint("batchId", { mode: "number", unsigned: true }),
+  type: varchar("type", { length: 64 }).notNull(),
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  recommendation: text("recommendation"),
+  status: mysqlEnum("status", ["open", "acknowledged", "resolved"]).notNull().default("open"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+  resolvedBy: bigint("resolvedBy", { mode: "number", unsigned: true }),
+}, (table) => [
+  index("prediction_findings_company_status_idx").on(table.companyId, table.status, table.createdAt),
+  index("prediction_findings_run_idx").on(table.predictionRunId),
+]);
+
+export const measurementQualityFlags = mysqlTable("measurement_quality_flags", {
+  id: serial("id").primaryKey(),
+  companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
+  sourceTable: varchar("sourceTable", { length: 64 }).notNull(),
+  sourceId: bigint("sourceId", { mode: "number", unsigned: true }).notNull(),
+  metric: varchar("metric", { length: 64 }).notNull(),
+  quality: mysqlEnum("quality", ["accepted", "rejected", "suspect"]).notNull(),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  flaggedBy: bigint("flaggedBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+}, (table) => [
+  uniqueIndex("measurement_quality_source_metric_unique").on(table.sourceTable, table.sourceId, table.metric),
+  index("measurement_quality_company_created_idx").on(table.companyId, table.createdAt),
+]);

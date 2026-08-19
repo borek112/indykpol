@@ -1,11 +1,13 @@
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import type { User } from "@db/schema";
-import { authenticateRequest } from "./kimi/auth";
+import { authenticateRequest } from "./auth/local";
+
+export type ContextUser = Omit<User, "passwordHash" | "sessionVersion">;
 
 export type TrpcContext = {
   req: Request;
   resHeaders: Headers;
-  user?: User;
+  user?: ContextUser;
 };
 
 export async function createContext(

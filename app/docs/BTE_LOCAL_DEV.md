@@ -68,24 +68,11 @@ npm test                      # vitest — 80/80
 npm run build                 # vite build + esbuild api/boot.ts
 ```
 
-## 6. Dev login (bez serwera OAuth Kimi)
+## 6. Local authentication
 
-Backend podpisuje sesję JWT HS256 sekretem `APP_SECRET` (cookie `kimi_sid`).
-Lokalnie możesz utworzyć admina i token:
-
-```sql
-INSERT INTO users (unionId, name, email, role, createdAt, updatedAt, lastSignInAt)
-VALUES ('dev-owner', 'Dev Admin', 'dev@bte.local', 'admin', NOW(), NOW(), NOW());
-```
-
-```js
-// node (z node_modules projektu)
-const jose = require("jose");
-const token = await new jose.SignJWT({ unionId: "dev-owner", clientId: "bte-local" })
-  .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("1 year")
-  .sign(new TextEncoder().encode("local-dev-secret-not-for-production"));
-// Cookie: kimi_sid=<token>
-```
+Use `POST /api/auth/register` to create the first company administrator, then
+`POST /api/auth/login`. The backend issues an HttpOnly `bte_sid` cookie signed
+with `SESSION_SECRET`; credentials and session secrets never reach Vite.
 
 ## 7. Stan walidacji (2026-08-09)
 

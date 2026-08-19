@@ -250,7 +250,13 @@ export const nutritionRouter = createRouter({
 
   /* Symulator całego rzutu dla danej mieszanki */
   batchSimulation: authedQuery
-    .input(z.object({ items: mixInput.shape.items, ageGroup: mixInput.shape.ageGroup, birds: z.number().default(10000), days: z.number().default(140) }))
+    .input(z.object({
+      items: mixInput.shape.items,
+      ageGroup: mixInput.shape.ageGroup,
+      sex: mixInput.shape.sex,
+      birds: z.number().default(10000),
+      days: z.number().default(140),
+    }))
     .query(async ({ input }) => {
       const db = getDb();
       const items = await loadIngredients(db, input.items);

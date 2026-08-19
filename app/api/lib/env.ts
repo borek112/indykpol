@@ -28,15 +28,14 @@ function optional(name: string, fallback = ""): string {
 }
 
 export const env = {
-  // Kimi OAuth — opcjonalne poza platformą Kimi; bez nich logowanie OAuth jest nieaktywne, reszta systemu działa
-  // APP_ID is optional for local dev. We still need a non-empty clientId for dev-login/session tokens.
-  appId: process.env.APP_ID || (process.env.NODE_ENV === "production" ? optional("APP_ID") : "bte-local"),
-  appSecret: optional("APP_SECRET", process.env.JWT_SECRET || "bloody-turkey-dev-secret"),
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
-  kimiAuthUrl: optional("KIMI_AUTH_URL"),
-  kimiOpenUrl: optional("KIMI_OPEN_URL"),
+  sessionSecret: process.env.SESSION_SECRET || process.env.JWT_SECRET || (
+    process.env.NODE_ENV === "production" ? required("SESSION_SECRET") : "bte-local-session-secret"
+  ),
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
+  demoMode: process.env.DEMO_MODE === "true",
+  demoCompanyId: Number.parseInt(process.env.DEMO_COMPANY_ID ?? "", 10) || null,
   uploadDir: process.env.UPLOAD_DIR ?? "/mnt/agents/output/uploads",
   frontendUrl: optional("FRONTEND_URL", process.env.CORS_ORIGIN ?? ""),
 };

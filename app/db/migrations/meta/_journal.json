@@ -15,6 +15,20 @@
       "when": 1786646824213,
       "tag": "0011_colossal_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1787172400000,
+      "tag": "0012_local_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1787173100000,
+      "tag": "0013_prediction_engine",
+      "breakpoints": true
     }
   ]
 }

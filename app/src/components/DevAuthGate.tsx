@@ -1,26 +1,28 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 
-/* DEV-ONLY auth bootstrap (nie dotyka auth produkcyjnego ani RBAC).
+/* Demo auth bootstrap.
    Wykrywa brak ważnej sesji przez publiczną sondę /api/dev-login (HEAD-like GET
    z redirect:'manual'): 302 => sesja już jest albo dev-login dostępny; 404 => produkcja
    (endpoint nie istnieje) => nie robimy nic. Gdy brak sesji w dev: pokazuje ekran
    „Sesja wygasła — logowanie developerskie…” i przechodzi przez /api/dev-login
-   (backend ustawia cookie kimi_sid i wraca na "/", a my wracamy na pierwotną stronę
+   (backend ustawia bezpieczne cookie sesyjne i wraca na "/", a my wracamy na pierwotną stronę
    i odświeżamy zapytania tRPC). */
 
 const DEV = import.meta.env.DEV;
+const DEMO_MODE = DEV || import.meta.env.VITE_DEMO_MODE === "true";
+const DEMO_LOGIN_PATH = DEV ? "/api/dev-login" : "/api/demo-login";
 const PENDING_KEY = "bte_dev_auth_pending";
 
 export default function DevAuthGate({ children }: { children: React.ReactNode }) {
-  const [checking, setChecking] = useState(DEV);
+  const [checking, setChecking] = useState(DEMO_MODE);
   const location = useLocation();
 
   useEffect(() => {
-    if (!DEV) return;
+    if (!DEMO_MODE) return;
 
     // Powrót z dev-login: sesja jest -> przywróć pierwotną stronę i pozwól
-    // komponentom ponownie wykonać zapytania tRPC (już z kimi_sid).
+    // komponentom ponownie wykonać zapytania tRPC z aktualną sesją.
     if (sessionStorage.getItem(PENDING_KEY)) {
       sessionStorage.removeItem(PENDING_KEY);
       const ret = sessionStorage.getItem("bte_dev_auth_return");
@@ -44,13 +46,16 @@ export default function DevAuthGate({ children }: { children: React.ReactNode })
         if (cancelled) return;
         if (probe.status === 401 || probe.status === 403) {
           // brak ważnej sesji -> sprawdź, czy dev-login jest dostępny (tylko dev)
-          const dl = await fetch("/api/dev-login", { redirect: "manual", credentials: "include" });
+          const dl = await fetch(DEMO_LOGIN_PATH, { redirect: "manual", credentials: "include" });
           if (cancelled) return;
-          if (dl.status === 404) { setChecking(false); return; } // production: nie ingerujemy
+          if (dl.status === 404) {
+            setChecking(false);
+            return;
+          }
           // oznacz powrót i przekieruj na pierwotną stronę po zalogowaniu
           sessionStorage.setItem(PENDING_KEY, "1");
           sessionStorage.setItem("bte_dev_auth_return", location.pathname + location.search || "/");
-          window.location.assign("/api/dev-login");
+          window.location.assign(DEMO_LOGIN_PATH);
           return;
         }
         setChecking(false); // sesja jest albo endpoint publiczny
@@ -62,7 +67,7 @@ export default function DevAuthGate({ children }: { children: React.ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (DEV && checking) {
+  if (DEMO_MODE && checking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-300">
         <div className="text-center">
