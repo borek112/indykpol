@@ -11,6 +11,13 @@
   # Ustaw wygodniej w panelu: Site settings → Environment variables
   # VITE_API_URL = "https://bloody-turkey.up.railway.app/api/trpc"
 
+# Proxy API do Railway backendu (najpierw przed regułą SPA).
+[[redirects]]
+  from = "/api/*"
+  to = "https://indykpol-production.up.railway.app/api/:splat"
+  status = 200
+  force = true
+
 # SPA — wszystkie ścieżki kieruj do index.html (routing po stronie Reacta)
 [[redirects]]
   from = "/*"

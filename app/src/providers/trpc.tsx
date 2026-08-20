@@ -9,8 +9,9 @@ export const trpc = createTRPCReact<AppRouter>();
 
 const queryClient = new QueryClient();
 const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+const demoMode = import.meta.env.VITE_DEMO_MODE === "true";
 let trpcUrl = "/api/trpc";
-if (apiBaseUrl) {
+if (!demoMode && apiBaseUrl) {
   try {
     trpcUrl = new URL("/api/trpc", `${apiBaseUrl}/`).toString();
   } catch {
