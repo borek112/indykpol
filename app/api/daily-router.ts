@@ -4,6 +4,7 @@ import { getDb } from "./queries/connection";
 import * as s from "@db/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { audit } from "./audit";
+import { requireBatchTenant } from "./tenant";
 
 const num = (v: unknown) => Number(v ?? 0);
 
@@ -11,7 +12,8 @@ export const dailyRouter = createRouter({
   /* lista dzienników rzutu */
   logs: authedQuery
     .input(z.object({ batchId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       return getDb().select().from(s.dailyLogs)
         .where(eq(s.dailyLogs.batchId, input.batchId))
         .orderBy(asc(s.dailyLogs.day));
@@ -30,8 +32,12 @@ export const dailyRouter = createRouter({
       humidityPct: z.number().min(0).max(100).optional(),
       ammoniaPpm: z.number().min(0).max(200).optional(),
       note: z.string().max(500).optional(),
+      // Używane przez szybki obchód: dopisuje obserwację bez kasowania
+      // wcześniejszych danych dziennych dla tego samego rzutu i dnia.
+      preserveExisting: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       const db = getDb();
       const [batch] = await db.select().from(s.batches).where(eq(s.batches.id, input.batchId));
       if (!batch) throw new Error("Rzut nie istnieje");
@@ -43,16 +49,22 @@ export const dailyRouter = createRouter({
         .where(and(eq(s.dailyLogs.batchId, input.batchId), eq(s.dailyLogs.day, input.day)));
 
       await db.transaction(async (tx) => {
+        const preserve = input.preserveExisting && existing;
         const values = {
           batchId: input.batchId, day: input.day,
-          mortality: input.mortality, culls: input.culls,
-          waterLiters: input.waterLiters?.toFixed(1), feedKg: input.feedKg?.toFixed(1),
-          tempC: input.tempC?.toFixed(1), humidityPct: input.humidityPct?.toFixed(1),
-          ammoniaPpm: input.ammoniaPpm?.toFixed(1), note: input.note, updatedBy: "dziennik",
+          mortality: preserve ? existing.mortality + input.mortality : input.mortality,
+          culls: preserve ? existing.culls + input.culls : input.culls,
+          waterLiters: preserve && input.waterLiters === undefined ? existing.waterLiters : input.waterLiters?.toFixed(1),
+          feedKg: preserve && input.feedKg === undefined ? existing.feedKg : input.feedKg?.toFixed(1),
+          tempC: preserve && input.tempC === undefined ? existing.tempC : input.tempC?.toFixed(1),
+          humidityPct: preserve && input.humidityPct === undefined ? existing.humidityPct : input.humidityPct?.toFixed(1),
+          ammoniaPpm: preserve && input.ammoniaPpm === undefined ? existing.ammoniaPpm : input.ammoniaPpm?.toFixed(1),
+          note: preserve && existing.note && input.note ? `${existing.note}\n${input.note}`.slice(0, 500) : (input.note ?? existing?.note),
+          updatedBy: "dziennik",
         };
         if (existing) {
           // korekta: różnica upadków wraca / schodzi ze stada
-          const delta = (input.mortality + input.culls) - (existing.mortality + existing.culls);
+          const delta = (values.mortality + values.culls) - (existing.mortality + existing.culls);
           await tx.update(s.dailyLogs).set(values).where(eq(s.dailyLogs.id, existing.id));
           if (delta !== 0) {
             await tx.update(s.batches)
@@ -82,7 +94,8 @@ export const dailyRouter = createRouter({
   /* statystyki rozbudowane — agregaty i wskaźniki z dziennika */
   stats: authedQuery
     .input(z.object({ batchId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       const db = getDb();
       const logs = await db.select().from(s.dailyLogs)
         .where(eq(s.dailyLogs.batchId, input.batchId)).orderBy(asc(s.dailyLogs.day));
@@ -114,6 +127,7 @@ export const dailyRouter = createRouter({
           waterDeviationPct: waterPerBirdMl && expectedWaterMl ? ((waterPerBirdMl - expectedWaterMl) / expectedWaterMl) * 100 : null,
           tempC: l.tempC ? num(l.tempC) : null, humidityPct: l.humidityPct ? num(l.humidityPct) : null,
           ammoniaPpm: l.ammoniaPpm ? num(l.ammoniaPpm) : null,
+          note: l.note,
         };
       });
 

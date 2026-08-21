@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { countryFlag, fmtNum, num } from "@/lib/geo";
+import { ClipboardPlus, ChartNoAxesCombined } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type SexFilter = "all" | "toms" | "hens" | "mixed";
@@ -212,6 +213,16 @@ export default function Production() {
                             <div className="text-[10px] text-zinc-500">
                               {row.batch.status === "closed" && "zamknięty"}
                             </div>
+                            {row.batch.status === "active" && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <Link to={`/produkcja/${row.batch.id}?obchod=1`} className="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-500">
+                                  <ClipboardPlus className="h-3 w-3" /> Szybki obchód
+                                </Link>
+                                <Link to={`/produkcja/${row.batch.id}?centrum=1`} className="inline-flex items-center gap-1 rounded border border-red-800/70 bg-red-950/30 px-2 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-950/60">
+                                  <ChartNoAxesCombined className="h-3 w-3" /> Centrum analityczne
+                                </Link>
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-zinc-300">
                             {row.batch.sex === "toms" ? "indory" : row.batch.sex === "hens" ? "indyczki" : "mieszany"}

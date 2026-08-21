@@ -90,6 +90,7 @@ function RecipeCreator() {
   const [note, setNote] = useState("");
   const [mix, setMix] = useState<MixRow[]>([]);
   const [addId, setAddId] = useState(0);
+  const [batchKg, setBatchKg] = useState(1000);
   const [sex, setSex] = useState<"toms" | "hens" | "mixed">("mixed");
   const [season, setSeason] = useState<"winter" | "summer" | "all">("all");
 
@@ -119,7 +120,13 @@ function RecipeCreator() {
 
   const total = mix.reduce((a, m) => a + m.percent, 0);
   const list = ings.data ?? [];
-  const available = list.filter((i) => !mix.some((m) => m.ingredientId === i.id));
+  // Ten sam surowiec może istnieć w katalogu pod różnymi identyfikatorami.
+  // W jednej mieszance pokazujemy go tylko raz, aby nie dublować pozycji.
+  const ingredientKey = (name: string) => name.trim().toLocaleLowerCase("pl-PL");
+  const usedIngredientNames = new Set(
+    mix.map((m) => list.find((i) => i.id === m.ingredientId)?.name).filter(Boolean).map((name) => ingredientKey(name!)),
+  );
+  const available = list.filter((i) => !usedIngredientNames.has(ingredientKey(i.name)));
 
   const setPct = (id: number, pct: number) =>
     setMix((m) => m.map((r) => (r.ingredientId === id ? { ...r, percent: Math.max(0, Math.min(100, pct)) } : r)));
@@ -216,7 +223,12 @@ function RecipeCreator() {
               <option value={0}>— dodaj surowiec —</option>
               {available.map((i) => <option key={i.id} value={i.id}>{countryFlag(i.countryCode)} {i.name} ({fmtEur2(num(i.pricePerTon))}/t)</option>)}
             </select>
-            <button disabled={!addId} onClick={() => { setMix((m) => [...m, { ingredientId: addId, percent: 0 }]); setAddId(0); }}
+            <button disabled={!addId} onClick={() => {
+              const ingredient = list.find((i) => i.id === addId);
+              if (!ingredient || usedIngredientNames.has(ingredientKey(ingredient.name))) return;
+              setMix((m) => [...m, { ingredientId: addId, percent: 0 }]);
+              setAddId(0);
+            }}
               className="flex shrink-0 items-center gap-1 rounded-lg bg-zinc-700 px-3 py-2 text-sm hover:bg-zinc-600 disabled:opacity-40">
               <Plus className="h-4 w-4" /> Dodaj
             </button>
@@ -252,6 +264,35 @@ function RecipeCreator() {
             Math.abs(total - 100) < 0.5 ? "border-emerald-800/60 text-emerald-300" : "border-amber-800/60 text-amber-300"}`}>
             <span>Suma udziałów</span>
             <b>{total.toFixed(1)}%</b>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-red-900/60 bg-red-950/20 p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-red-300">Przelicznik mieszadła</h3>
+                <p className="mt-1 text-xs text-zinc-500">Zmiana masy partii natychmiast przelicza ilość każdego surowca. Nie zmienia parametrów receptury.</p>
+              </div>
+              <label className="w-full text-xs text-zinc-400 sm:w-48">Masa całej mieszanki (kg)
+                <input type="number" min={0} step={1} value={batchKg || ""} onChange={(e) => setBatchKg(Math.max(0, Number(e.target.value)))} className={`${inputCls} mt-1 text-right`} />
+              </label>
+            </div>
+            {active.length === 0 ? (
+              <p className="mt-3 text-sm text-zinc-500">Dodaj surowce do receptury, aby zobaczyć ilości dla partii.</p>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-lg border border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-900 text-left text-[10px] uppercase tracking-wider text-zinc-500"><tr><th className="px-3 py-2">Surowiec</th><th className="px-3 py-2 text-right">Udział</th><th className="px-3 py-2 text-right">Ilość</th></tr></thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {active.map((row) => {
+                      const ingredient = list.find((i) => i.id === row.ingredientId);
+                      if (!ingredient) return null;
+                      const kg = batchKg * row.percent / 100;
+                      return <tr key={row.ingredientId}><td className="px-3 py-2 text-zinc-200">{ingredient.name}</td><td className="px-3 py-2 text-right text-zinc-400">{row.percent.toFixed(2)}%</td><td className="px-3 py-2 text-right font-semibold text-red-300">{kg.toFixed(2)} kg</td></tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <label className="mt-3 block text-xs text-zinc-500">Notatka (opcjonalnie — trafi do raportu eksperckiego)
