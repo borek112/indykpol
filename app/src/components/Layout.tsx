@@ -84,11 +84,11 @@ function TierSwitcher() {
           ))}
           <div className="border-t border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-400">Tryb produktu</div>
           <div className="px-2 pb-2">
-            <button onClick={() => setProductMode("demo")} className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "demo" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}>
+            <button onClick={() => setProductMode("demo")} className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "demo" ? "bg-red-600/15 text-red-300" : "bg-zinc-800 text-zinc-300"}`}>
               <span>DEMO</span>
               <span>{mode === "demo" ? "AKTYWNE" : "Wybierz"}</span>
             </button>
-            <button onClick={() => setProductMode("full")} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "full" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}>
+            <button onClick={() => setProductMode("full")} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "full" ? "bg-red-600/15 text-red-300" : "bg-zinc-800 text-zinc-300"}`}>
               <span>FULL</span>
               <span>{mode === "full" ? "AKTYWNE" : "Wybierz"}</span>
             </button>
@@ -129,7 +129,7 @@ function NotificationBell() {
         <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
             <span className="text-sm font-semibold">Powiadomienia</span>
-            {unread > 0 && <button onClick={() => markAll.mutate()} className="text-xs text-emerald-400 hover:underline">Oznacz wszystkie</button>}
+            {unread > 0 && <button onClick={() => markAll.mutate()} className="text-xs text-red-300 hover:underline">Oznacz wszystkie</button>}
           </div>
           <div className="max-h-80 overflow-y-auto">
             {(q.data ?? []).length === 0 && <div className="px-4 py-6 text-center text-sm text-zinc-500">Brak powiadomień</div>}
@@ -158,9 +158,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => setMobileOpen(false), [loc.pathname]);
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-zinc-900/95">
-      <div className="flex items-center gap-3 border-b border-zinc-800 px-5 py-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600/20 text-red-500">
+    <div className="flex h-full flex-col bg-[#11161f]/95">
+      <div className="flex items-center gap-3 border-b border-zinc-800/90 px-5 py-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/25 bg-red-600/15 text-red-400 shadow-[0_8px_20px_rgba(220,38,38,0.14)]">
           <Bird className="h-6 w-6" />
         </div>
         <div>
@@ -179,7 +179,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               key={n.to}
               to={n.to}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                active ? "bg-emerald-600/15 text-emerald-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              active ? "border border-red-500/20 bg-red-600/15 text-red-300 shadow-[inset_3px_0_0_#ef4444]" : "border border-transparent text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
               }`}
             >
               <n.icon className="h-4 w-4" />
@@ -197,27 +197,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-transparent text-zinc-100">
       <Toaster position="top-right" richColors />
       <CommandPalette />
 
       {/* mobile top bar */}
-      <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-800/90 bg-[#11161f]/95 px-4 py-3 backdrop-blur lg:hidden">
         <button onClick={() => setMobileOpen(true)}><Menu className="h-5 w-5" /></button>
         <span className="text-sm font-bold">BLOODY TURKEY <span className="text-zinc-500">ERP</span></span>
         <div className="ml-auto"><NotificationBell /></div>
       </div>
 
       {/* desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-zinc-800 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-zinc-800/90 lg:block">
         {sidebar}
       </aside>
 
       {/* desktop top bar: breadcrumb + search + bell */}
-      <div className="sticky top-0 z-20 hidden items-center gap-4 border-b border-zinc-800 bg-zinc-950/90 px-8 py-3 backdrop-blur lg:ml-60 lg:flex">
+      <div className="sticky top-0 z-20 hidden items-center gap-4 border-b border-zinc-800/90 bg-[#0d1117]/90 px-8 py-3 backdrop-blur lg:ml-64 lg:flex">
         <Breadcrumbs />
         <div className="ml-auto flex items-center gap-2">
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-400">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-red-300">
             {productModeLabel(mode)}
           </div>
           <button
@@ -240,7 +240,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="p-4 sm:p-6 lg:ml-60 lg:p-8">
+      <main className="mx-auto w-full max-w-[1720px] p-4 sm:p-6 lg:ml-64 lg:w-[calc(100%-16rem)] lg:p-8">
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
     </div>

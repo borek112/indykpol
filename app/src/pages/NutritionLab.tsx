@@ -3,7 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmtEur } from "@/lib/geo";
-import { FlaskConical, Info, Scale, Droplets, Wheat, TrendingUp, ShieldCheck, AlertTriangle, BrainCircuit, Bird, Coins } from "lucide-react";
+import { FlaskConical, Info, Scale, Droplets, Wheat, TrendingUp, ShieldCheck, AlertTriangle, BrainCircuit, Bird, Coins, BookOpen, Thermometer, Wind } from "lucide-react";
 import FeedIntelligence from "@/components/FeedIntelligence";
 
 const num = (v: unknown) => Number(v ?? 0);
@@ -286,7 +286,85 @@ export default function NutritionLab() {
         </div>
       </div>
 
+      <TurkeyStandards />
       <FeedIntelligence />
     </div>
+  );
+}
+
+type PerformanceRow = {
+  week: number;
+  weightKg: number;
+  weeklyFeedKg: number;
+  cumulativeFeedKg: number;
+  fcr: number;
+  waterL: number;
+};
+
+// Referencja Hybrid Converter: cele handlowe są wskaźnikiem porównawczym,
+// nie zastępują programu dla konkretnej linii genetycznej i warunków fermy.
+const TOM_STANDARDS: PerformanceRow[] = [
+  { week: 1, weightKg: 0.17, weeklyFeedKg: 0.17, cumulativeFeedKg: 0.17, fcr: 1.06, waterL: 0.070 },
+  { week: 2, weightKg: 0.35, weeklyFeedKg: 0.23, cumulativeFeedKg: 0.41, fcr: 1.17, waterL: 0.134 },
+  { week: 4, weightKg: 1.32, weeklyFeedKg: 0.78, cumulativeFeedKg: 1.71, fcr: 1.29, waterL: 0.276 },
+  { week: 6, weightKg: 2.96, weeklyFeedKg: 1.37, cumulativeFeedKg: 4.14, fcr: 1.39, waterL: 0.422 },
+  { week: 8, weightKg: 5.07, weeklyFeedKg: 1.85, cumulativeFeedKg: 7.64, fcr: 1.51, waterL: 0.598 },
+  { week: 10, weightKg: 7.44, weeklyFeedKg: 2.44, cumulativeFeedKg: 12.28, fcr: 1.65, waterL: 0.765 },
+  { week: 12, weightKg: 9.93, weeklyFeedKg: 2.95, cumulativeFeedKg: 17.87, fcr: 1.80, waterL: 0.900 },
+  { week: 14, weightKg: 12.54, weeklyFeedKg: 3.46, cumulativeFeedKg: 24.63, fcr: 1.96, waterL: 0.991 },
+  { week: 16, weightKg: 15.12, weeklyFeedKg: 3.92, cumulativeFeedKg: 32.19, fcr: 2.13, waterL: 1.038 },
+  { week: 18, weightKg: 17.58, weeklyFeedKg: 4.17, cumulativeFeedKg: 40.49, fcr: 2.30, waterL: 1.053 },
+  { week: 20, weightKg: 19.89, weeklyFeedKg: 4.44, cumulativeFeedKg: 49.28, fcr: 2.48, waterL: 1.053 },
+];
+
+const HEN_STANDARDS: PerformanceRow[] = [
+  { week: 1, weightKg: 0.17, weeklyFeedKg: 0.17, cumulativeFeedKg: 0.17, fcr: 1.00, waterL: 0.063 },
+  { week: 2, weightKg: 0.36, weeklyFeedKg: 0.25, cumulativeFeedKg: 0.42, fcr: 1.16, waterL: 0.110 },
+  { week: 4, weightKg: 1.15, weeklyFeedKg: 0.67, cumulativeFeedKg: 1.53, fcr: 1.33, waterL: 0.223 },
+  { week: 6, weightKg: 2.47, weeklyFeedKg: 1.22, cumulativeFeedKg: 3.63, fcr: 1.47, waterL: 0.371 },
+  { week: 8, weightKg: 4.27, weeklyFeedKg: 1.69, cumulativeFeedKg: 6.77, fcr: 1.59, waterL: 0.524 },
+  { week: 10, weightKg: 6.27, weeklyFeedKg: 2.10, cumulativeFeedKg: 10.76, fcr: 1.72, waterL: 0.645 },
+  { week: 12, weightKg: 8.23, weeklyFeedKg: 2.38, cumulativeFeedKg: 15.39, fcr: 1.87, waterL: 0.724 },
+  { week: 14, weightKg: 9.97, weeklyFeedKg: 2.51, cumulativeFeedKg: 20.36, fcr: 2.04, waterL: 0.753 },
+  { week: 16, weightKg: 11.42, weeklyFeedKg: 2.64, cumulativeFeedKg: 25.57, fcr: 2.24, waterL: 0.769 },
+  { week: 18, weightKg: 12.57, weeklyFeedKg: 2.75, cumulativeFeedKg: 31.01, fcr: 2.47, waterL: 0.778 },
+];
+
+function TurkeyStandards() {
+  const [sex, setSex] = useState<Sex>("toms");
+  const rows = sex === "toms" ? TOM_STANDARDS : HEN_STANDARDS;
+  return (
+    <section className="rounded-2xl border border-red-900/60 bg-zinc-900/70 p-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-red-300"><BookOpen className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.14em]">Tabela referencyjna chowu</span></div>
+          <h2 className="mt-1 text-xl font-bold">Normy wzrostu, paszy i wody</h2>
+          <p className="mt-1 max-w-3xl text-sm text-zinc-500">Cele tygodniowe dla Hybrid Converter. Używaj ich do porównania trendu stada — nie jako automatycznej diagnozy lub zamiennika zaleceń lekarza weterynarii i programu danej linii.</p>
+        </div>
+        <div className="flex rounded-lg border border-zinc-700 bg-zinc-950/60 p-1">
+          {(["toms", "hens"] as const).map((item) => <button key={item} onClick={() => setSex(item)} className={`rounded-md px-3 py-1.5 text-sm font-semibold ${sex === item ? "bg-red-600 text-white" : "text-zinc-400 hover:text-zinc-100"}`}>{item === "toms" ? "Indory" : "Indyczki"}</button>)}
+        </div>
+      </div>
+
+      <div className="mt-5 overflow-x-auto rounded-xl border border-zinc-800">
+        <table className="min-w-[780px] w-full text-sm">
+          <thead className="bg-zinc-950/80 text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500"><tr><th className="px-3 py-3">Wiek</th><th className="px-3 py-3 text-right">Masa średnia</th><th className="px-3 py-3 text-right">Przyrost / dzień*</th><th className="px-3 py-3 text-right">Pasza / tydzień</th><th className="px-3 py-3 text-right">Pasza narastająco</th><th className="px-3 py-3 text-right">Pasza / dzień</th><th className="px-3 py-3 text-right">Woda / dzień</th><th className="px-3 py-3 text-right">FCR narast.</th></tr></thead>
+          <tbody className="divide-y divide-zinc-800/80">
+            {rows.map((row, index) => {
+              const previous = rows[index - 1];
+              const adg = previous ? ((row.weightKg - previous.weightKg) * 1000) / ((row.week - previous.week) * 7) : null;
+              return <tr key={row.week} className="hover:bg-zinc-800/35"><td className="px-3 py-3 font-medium text-red-100">{row.week}. tydz. <span className="text-zinc-500">({row.week * 7} d)</span></td><td className="px-3 py-3 text-right font-semibold">{row.weightKg.toFixed(2)} kg</td><td className="px-3 py-3 text-right">{adg ? `${adg.toFixed(0)} g` : "—"}</td><td className="px-3 py-3 text-right">{row.weeklyFeedKg.toFixed(2)} kg</td><td className="px-3 py-3 text-right">{row.cumulativeFeedKg.toFixed(2)} kg</td><td className="px-3 py-3 text-right">{(row.weeklyFeedKg * 1000 / 7).toFixed(0)} g</td><td className="px-3 py-3 text-right text-sky-300">{(row.waterL * 1000).toFixed(0)} ml</td><td className="px-3 py-3 text-right">{row.fcr.toFixed(2)}</td></tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-400"><Droplets className="h-4 w-4 text-sky-400" /> Woda</div><p className="mt-1 text-xs leading-relaxed text-zinc-500">Porównuj pobór dzienny na sztukę. Nagła zmiana trendu wymaga sprawdzenia poideł, temperatury, jakości wody i stada.</p></div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-400"><Thermometer className="h-4 w-4 text-amber-400" /> Środowisko</div><p className="mt-1 text-xs leading-relaxed text-zinc-500">Oceniaj temperaturę, wilgotność, wentylację i NH₃ razem z wodą, paszą oraz zachowaniem ptaków — pojedynczy wskaźnik nie wystarcza.</p></div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-400"><Wind className="h-4 w-4 text-emerald-400" /> Ściółka i zdrowie</div><p className="mt-1 text-xs leading-relaxed text-zinc-500">Codziennie oceniaj suchość ściółki, równomierność stada, dostęp do paszy i wody oraz upadki. Odchylenia zapisuj w Szybkim obchodzie.</p></div>
+      </div>
+      <p className="mt-4 text-[11px] leading-relaxed text-zinc-600">* Przyrost wyliczany między pokazanymi punktami tygodniowymi. Źródło: cele handlowe Hybrid Converter oraz wytyczne poboru wody Hybrid Turkeys. Wynik zależy m.in. od programu żywienia, jakości wody, zdrowia, obsady i warunków środowiskowych.</p>
+    </section>
   );
 }
