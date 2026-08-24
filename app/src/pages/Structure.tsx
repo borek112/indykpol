@@ -19,7 +19,7 @@ type FormState =
   | { kind: "house"; farmId: number }
   | { kind: "batch"; houseId: number }
   | { kind: "editFarm"; id: number; name: string; city: string; capacity: number }
-  | { kind: "editHouse"; id: number; name: string; areaM2: number }
+  | { kind: "editHouse"; id: number; name: string; areaM2: number; lengthM: number; widthM: number; heightM: number; feederCount: number; drinkerCount: number; lightingLux: number; lightingHours: number; ventilationM3h: number }
   | { kind: "line"; companyId: number }
   | null;
 
@@ -46,7 +46,7 @@ export default function Structure() {
   const company = (structure.data?.companies ?? []).find((c) => c.id === activeCompanyId);
 
   const [farmForm, setFarmForm] = useState({ name: "", countryCode: "PL", city: "", lat: 52, lng: 19, capacity: 50000 });
-  const [houseForm, setHouseForm] = useState({ name: "", houseType: "finisher" as "brooder" | "finisher", areaM2: 1800, sectorCount: 0 });
+  const [houseForm, setHouseForm] = useState({ name: "", houseType: "finisher" as "brooder" | "finisher", areaM2: 1800, sectorCount: 0, lengthM: 0, widthM: 0, heightM: 0, feederCount: 0, drinkerCount: 0, lightingLux: 0, lightingHours: 0, ventilationM3h: 0 });
   const [batchForm, setBatchForm] = useState({
     code: "", geneticLine: "BUT Big 6", sex: "toms" as "toms" | "hens" | "mixed",
     initialCount: 10000, startDate: new Date().toISOString().slice(0, 10), chickSupplier: "", chickPrice: 1.6,
@@ -174,6 +174,7 @@ export default function Structure() {
                         <span className="text-xs text-zinc-500">
                           {h.houseType === "brooder" ? "odchowalnia" : "kurnik"} · {fmtNum(num(h.areaM2))} m² · max {num(h.maxDensityKgM2)} kg/m²
                         </span>
+                        <span className="text-xs text-zinc-500">wyposażenie: {h.feederCount} karmników · {h.drinkerCount} poideł · {h.lightingLux} lx · {h.ventilationM3h.toLocaleString("pl-PL")} m³/h</span>
                         {h.sectors.length > 0 && (
                           <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[10px] text-zinc-400">
                             {h.sectors.length} sektorów
@@ -184,7 +185,7 @@ export default function Structure() {
                         <button onClick={() => setForm({ kind: "batch", houseId: h.id })} className="flex items-center gap-1 rounded-md bg-zinc-700/60 px-2.5 py-1.5 text-xs hover:bg-zinc-700">
                           <Plus className="h-3 w-3" /> Przyjęcie piskląt
                         </button>
-                        <button onClick={() => setForm({ kind: "editHouse", id: h.id, name: h.name, areaM2: num(h.areaM2) })} className="rounded p-1.5 text-zinc-500 hover:text-zinc-200"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setForm({ kind: "editHouse", id: h.id, name: h.name, areaM2: num(h.areaM2), lengthM: num(h.lengthM), widthM: num(h.widthM), heightM: num(h.heightM), feederCount: h.feederCount, drinkerCount: h.drinkerCount, lightingLux: h.lightingLux, lightingHours: num(h.lightingHours), ventilationM3h: h.ventilationM3h })} className="rounded p-1.5 text-zinc-500 hover:text-zinc-200"><Pencil className="h-3.5 w-3.5" /></button>
                         <button onClick={() => { if (confirm(`Archiwizować ${h.name}?`)) archiveHouse.mutate({ id: h.id }); }} className="rounded p-1.5 text-zinc-500 hover:text-red-400"><Archive className="h-3.5 w-3.5" /></button>
                       </div>
                     </div>
@@ -192,6 +193,14 @@ export default function Structure() {
                       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
                         <Field label="Nazwa"><input className={`${inputCls} w-48`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
                         <Field label="Powierzchnia m²"><input type="number" className={`${inputCls} w-32`} value={form.areaM2} onChange={(e) => setForm({ ...form, areaM2: Number(e.target.value) })} /></Field>
+                        <Field label="Dł. m"><input type="number" className={`${inputCls} w-24`} value={form.lengthM} onChange={(e) => setForm({ ...form, lengthM: Number(e.target.value) })} /></Field>
+                        <Field label="Szer. m"><input type="number" className={`${inputCls} w-24`} value={form.widthM} onChange={(e) => setForm({ ...form, widthM: Number(e.target.value) })} /></Field>
+                        <Field label="Wys. m"><input type="number" className={`${inputCls} w-24`} value={form.heightM} onChange={(e) => setForm({ ...form, heightM: Number(e.target.value) })} /></Field>
+                        <Field label="Karmniki"><input type="number" className={`${inputCls} w-24`} value={form.feederCount} onChange={(e) => setForm({ ...form, feederCount: Number(e.target.value) })} /></Field>
+                        <Field label="Poidła"><input type="number" className={`${inputCls} w-24`} value={form.drinkerCount} onChange={(e) => setForm({ ...form, drinkerCount: Number(e.target.value) })} /></Field>
+                        <Field label="Oświetlenie lx"><input type="number" className={`${inputCls} w-28`} value={form.lightingLux} onChange={(e) => setForm({ ...form, lightingLux: Number(e.target.value) })} /></Field>
+                        <Field label="Światło h/d"><input type="number" step="0.5" className={`${inputCls} w-28`} value={form.lightingHours} onChange={(e) => setForm({ ...form, lightingHours: Number(e.target.value) })} /></Field>
+                        <Field label="Wentylacja m³/h"><input type="number" className={`${inputCls} w-36`} value={form.ventilationM3h} onChange={(e) => setForm({ ...form, ventilationM3h: Number(e.target.value) })} /></Field>
                         <button onClick={() => { updateHouse.mutate({ id: h.id, name: form.name, areaM2: form.areaM2 }); setForm(null); }} className="rounded-lg bg-red-600 px-3 py-2 text-sm hover:bg-red-500">Zapisz</button>
                         <button onClick={() => setForm(null)} className="rounded-lg bg-zinc-800 px-3 py-2 text-sm">Anuluj</button>
                       </div>
@@ -260,6 +269,10 @@ export default function Structure() {
                       </Field>
                       <Field label="Powierzchnia (m²)"><input type="number" className={inputCls} value={houseForm.areaM2} onChange={(e) => setHouseForm({ ...houseForm, areaM2: Number(e.target.value) })} /></Field>
                       <Field label="Liczba sektorów"><input type="number" min={0} max={8} className={inputCls} value={houseForm.sectorCount} onChange={(e) => setHouseForm({ ...houseForm, sectorCount: Number(e.target.value) })} /></Field>
+                      <Field label="Dł. × szer. × wys. (m)"><div className="flex gap-1"><input type="number" className={inputCls} value={houseForm.lengthM} onChange={(e) => setHouseForm({ ...houseForm, lengthM: Number(e.target.value) })} /><input type="number" className={inputCls} value={houseForm.widthM} onChange={(e) => setHouseForm({ ...houseForm, widthM: Number(e.target.value) })} /><input type="number" className={inputCls} value={houseForm.heightM} onChange={(e) => setHouseForm({ ...houseForm, heightM: Number(e.target.value) })} /></div></Field>
+                      <Field label="Karmniki / poidła"><div className="flex gap-1"><input type="number" className={inputCls} value={houseForm.feederCount} onChange={(e) => setHouseForm({ ...houseForm, feederCount: Number(e.target.value) })} /><input type="number" className={inputCls} value={houseForm.drinkerCount} onChange={(e) => setHouseForm({ ...houseForm, drinkerCount: Number(e.target.value) })} /></div></Field>
+                      <Field label="Oświetlenie lx / h"><div className="flex gap-1"><input type="number" className={inputCls} value={houseForm.lightingLux} onChange={(e) => setHouseForm({ ...houseForm, lightingLux: Number(e.target.value) })} /><input type="number" step="0.5" className={inputCls} value={houseForm.lightingHours} onChange={(e) => setHouseForm({ ...houseForm, lightingHours: Number(e.target.value) })} /></div></Field>
+                      <Field label="Wentylacja m³/h"><input type="number" className={inputCls} value={houseForm.ventilationM3h} onChange={(e) => setHouseForm({ ...houseForm, ventilationM3h: Number(e.target.value) })} /></Field>
                     </div>
                     <div className="mt-3 flex gap-2">
                       <button

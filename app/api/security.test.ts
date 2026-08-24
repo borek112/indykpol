@@ -6,6 +6,7 @@ import type { TrpcContext } from "./context";
 import { authedQuery, adminQuery } from "./middleware";
 import { appRouter } from "./router";
 import { resolveDefaultCompanyId } from "./erp-router";
+import { requireRequestedCompany, requireTenantCompany } from "./tenant";
 
 /* ---------- helpers ---------- */
 const t = initTRPC.context<TrpcContext>().create({ transformer: superjson });
@@ -54,6 +55,19 @@ describe("RBAC middleware (unit)", () => {
   it("adminQuery przepuszcza rolę admin", async () => {
     const caller = probeAdmin.createCaller(userCtx("admin"));
     await expect(caller.x()).resolves.toBe("ok");
+  });
+});
+
+describe("tenant guards (unit)", () => {
+  it("uses only the company assigned to the authenticated user", () => {
+    const user = userCtx("user").user!;
+    user.companyId = 42;
+    expect(requireTenantCompany(user)).toBe(42);
+    expect(() => requireRequestedCompany(user, 43)).toThrow(/TENANT_MISMATCH/);
+  });
+
+  it("rejects a session without a company before accessing tenant data", () => {
+    expect(() => requireTenantCompany(userCtx("user").user!)).toThrow(/TENANT_MISMATCH/);
   });
 });
 

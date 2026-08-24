@@ -50,3 +50,22 @@ export async function requireBatchTenant(user: ContextUser, batchId: number) {
   if (!row) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: batch is not owned by your company." });
   return row;
 }
+
+export async function requireRecipeTenant(user: ContextUser, recipeId: number) {
+  const companyId = requireTenantCompany(user);
+  const [recipe] = await getDb().select().from(schema.recipes)
+    .where(and(eq(schema.recipes.id, recipeId), eq(schema.recipes.companyId, companyId))).limit(1);
+  if (!recipe) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: recipe is not owned by your company." });
+  return recipe;
+}
+
+export async function requireSiloTenant(user: ContextUser, siloId: number) {
+  const companyId = requireTenantCompany(user);
+  const rows = await getDb().select({ silo: schema.silos, farm: schema.farms })
+    .from(schema.silos)
+    .innerJoin(schema.farms, eq(schema.silos.farmId, schema.farms.id))
+    .where(and(eq(schema.silos.id, siloId), eq(schema.farms.companyId, companyId))).limit(1);
+  const row = rows.at(0);
+  if (!row) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: silo is not owned by your company." });
+  return row;
+}

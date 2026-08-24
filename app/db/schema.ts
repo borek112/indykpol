@@ -103,6 +103,14 @@ export const houses = mysqlTable("houses", {
   maxDensityKgM2: decimal("maxDensityKgM2", { precision: 5, scale: 1 })
     .notNull()
     .default("42.0"),
+  lengthM: decimal("lengthM", { precision: 7, scale: 1 }).notNull().default("0.0"),
+  widthM: decimal("widthM", { precision: 7, scale: 1 }).notNull().default("0.0"),
+  heightM: decimal("heightM", { precision: 5, scale: 1 }).notNull().default("0.0"),
+  feederCount: int("feederCount").notNull().default(0),
+  drinkerCount: int("drinkerCount").notNull().default(0),
+  lightingLux: int("lightingLux").notNull().default(0),
+  lightingHours: decimal("lightingHours", { precision: 4, scale: 1 }).notNull().default("0.0"),
+  ventilationM3h: int("ventilationM3h").notNull().default(0),
   ...base,
 });
 

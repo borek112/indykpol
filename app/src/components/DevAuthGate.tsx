@@ -10,16 +10,16 @@ import { useLocation } from "react-router";
    i odświeżamy zapytania tRPC). */
 
 const DEV = import.meta.env.DEV;
-const DEMO_MODE = DEV || import.meta.env.VITE_DEMO_MODE === "true";
+const AUTO_LOGIN = DEV || import.meta.env.VITE_DEMO_MODE === "true";
 const DEMO_LOGIN_PATH = DEV ? "/api/dev-login" : "/api/demo-login";
 const PENDING_KEY = "bte_dev_auth_pending";
 
 export default function DevAuthGate({ children }: { children: React.ReactNode }) {
-  const [checking, setChecking] = useState(DEMO_MODE);
+  const [checking, setChecking] = useState(AUTO_LOGIN);
   const location = useLocation();
 
   useEffect(() => {
-    if (!DEMO_MODE) return;
+    if (!AUTO_LOGIN) return;
 
     // Powrót z dev-login: sesja jest -> przywróć pierwotną stronę i pozwól
     // komponentom ponownie wykonać zapytania tRPC z aktualną sesją.
@@ -67,7 +67,7 @@ export default function DevAuthGate({ children }: { children: React.ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (DEMO_MODE && checking) {
+  if (AUTO_LOGIN && checking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-300">
         <div className="text-center">

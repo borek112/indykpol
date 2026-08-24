@@ -10,7 +10,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/providers/trpc";
 import { tierDef, TIERS, setTier } from "@/lib/editions";
-import { getProductMode, productModeLabel, setProductMode } from "@/lib/product-mode";
+import { getProductMode, productModeLabel } from "@/lib/product-mode";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -83,15 +83,9 @@ function TierSwitcher() {
             </button>
           ))}
           <div className="border-t border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-400">Tryb produktu</div>
-          <div className="px-2 pb-2">
-            <button onClick={() => setProductMode("demo")} className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "demo" ? "bg-red-600/15 text-red-300" : "bg-zinc-800 text-zinc-300"}`}>
-              <span>DEMO</span>
-              <span>{mode === "demo" ? "AKTYWNE" : "Wybierz"}</span>
-            </button>
-            <button onClick={() => setProductMode("full")} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "full" ? "bg-red-600/15 text-red-300" : "bg-zinc-800 text-zinc-300"}`}>
-              <span>FULL</span>
-              <span>{mode === "full" ? "AKTYWNE" : "Wybierz"}</span>
-            </button>
+          <div className="px-4 pb-3 text-xs text-zinc-400">
+            <div className="font-semibold text-zinc-200">{productModeLabel(mode)}</div>
+            <p className="mt-1 leading-relaxed">Tryb jest określany przez konfigurację wdrożenia. Nie można przełączyć danych demonstracyjnych i firmowych wyłącznie w interfejsie.</p>
           </div>
         </div>
       )}

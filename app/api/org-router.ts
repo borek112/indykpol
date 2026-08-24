@@ -154,6 +154,9 @@ export const orgRouter = createRouter({
       farmId: z.number(), name: z.string().min(1),
       houseType: z.enum(["brooder", "finisher"]), areaM2: z.number().min(10),
       sectorCount: z.number().int().min(0).max(8).default(0),
+      lengthM: z.number().min(0).optional(), widthM: z.number().min(0).optional(), heightM: z.number().min(0).optional(),
+      feederCount: z.number().int().min(0).optional(), drinkerCount: z.number().int().min(0).optional(),
+      lightingLux: z.number().int().min(0).optional(), lightingHours: z.number().min(0).max(24).optional(), ventilationM3h: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await requireFarmTenant(ctx.user!, input.farmId);
@@ -161,6 +164,9 @@ export const orgRouter = createRouter({
       const [{ id }] = await db.insert(s.houses).values({
         farmId: input.farmId, name: input.name, houseType: input.houseType,
         areaM2: input.areaM2.toFixed(1), maxDensityKgM2: input.houseType === "brooder" ? "25.0" : "42.0",
+        lengthM: (input.lengthM ?? 0).toFixed(1), widthM: (input.widthM ?? 0).toFixed(1), heightM: (input.heightM ?? 0).toFixed(1),
+        feederCount: input.feederCount ?? 0, drinkerCount: input.drinkerCount ?? 0,
+        lightingLux: input.lightingLux ?? 0, lightingHours: (input.lightingHours ?? 0).toFixed(1), ventilationM3h: input.ventilationM3h ?? 0,
       }).$returningId();
       await audit("houses", id, "create", { newValues: input });
       for (let i = 0; i < input.sectorCount; i++) {
@@ -177,6 +183,9 @@ export const orgRouter = createRouter({
     .input(z.object({
       id: z.number(), name: z.string().min(1).optional(),
       areaM2: z.number().optional(), maxDensityKgM2: z.number().optional(),
+      lengthM: z.number().min(0).optional(), widthM: z.number().min(0).optional(), heightM: z.number().min(0).optional(),
+      feederCount: z.number().int().min(0).optional(), drinkerCount: z.number().int().min(0).optional(),
+      lightingLux: z.number().int().min(0).optional(), lightingHours: z.number().min(0).max(24).optional(), ventilationM3h: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await requireHouseTenant(ctx.user!, input.id);
@@ -186,6 +195,14 @@ export const orgRouter = createRouter({
       if (input.name) data.name = input.name;
       if (input.areaM2) data.areaM2 = input.areaM2.toFixed(1);
       if (input.maxDensityKgM2) data.maxDensityKgM2 = input.maxDensityKgM2.toFixed(1);
+      if (input.lengthM !== undefined) data.lengthM = input.lengthM.toFixed(1);
+      if (input.widthM !== undefined) data.widthM = input.widthM.toFixed(1);
+      if (input.heightM !== undefined) data.heightM = input.heightM.toFixed(1);
+      if (input.feederCount !== undefined) data.feederCount = input.feederCount;
+      if (input.drinkerCount !== undefined) data.drinkerCount = input.drinkerCount;
+      if (input.lightingLux !== undefined) data.lightingLux = input.lightingLux;
+      if (input.lightingHours !== undefined) data.lightingHours = input.lightingHours.toFixed(1);
+      if (input.ventilationM3h !== undefined) data.ventilationM3h = input.ventilationM3h;
       await db.update(s.houses).set({ ...data, updatedBy: "panel" }).where(eq(s.houses.id, input.id));
       await audit("houses", input.id, "update", { oldValues: old, newValues: data });
       return { ok: true };
@@ -212,6 +229,17 @@ export const orgRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       await requireHouseTenant(ctx.user!, input.houseId);
       const db = getDb();
+      if (input.sectorId) {
+        const [sector] = await db.select().from(s.sectors)
+          .where(and(eq(s.sectors.id, input.sectorId), eq(s.sectors.houseId, input.houseId)));
+        if (!sector) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: sector is not part of the selected house." });
+      }
+      if (input.geneticLineId) {
+        const companyId = requireTenantCompany(ctx.user!);
+        const [line] = await db.select().from(s.geneticLines)
+          .where(and(eq(s.geneticLines.id, input.geneticLineId), eq(s.geneticLines.companyId, companyId)));
+        if (!line) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: genetic line is not owned by your company." });
+      }
       const growDays = input.sex === "toms" ? 140 : input.sex === "hens" ? 112 : 126;
       const end = new Date(input.startDate); end.setDate(end.getDate() + growDays);
       const [{ id }] = await db.insert(s.batches).values({
