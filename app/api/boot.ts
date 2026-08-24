@@ -61,6 +61,9 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
       companyId,
     }).$returningId();
     [user] = await db.select().from(users).where(eq(users.id, id));
+  } else if (user.companyId !== companyId) {
+    await db.update(users).set({ companyId, name }).where(eq(users.id, user.id));
+    [user] = await db.select().from(users).where(eq(users.id, user.id));
   }
   await establishSession(c, user);
   return user;
@@ -86,7 +89,9 @@ if (!env.isProduction) {
     const { getDb } = await import("./queries/connection");
     const { companies } = await import("@db/schema");
     const db = getDb();
-    const [company] = await db.select().from(companies).limit(1);
+    const [company] = env.demoCompanyId
+      ? await db.select().from(companies).where(eq(companies.id, env.demoCompanyId)).limit(1)
+      : await db.select().from(companies).limit(1);
     const companyId = company?.id ?? (await db.insert(companies).values({
         name: "Bloody Turkey Demo",
         countryCode: "PL",

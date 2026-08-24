@@ -3,6 +3,7 @@ import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import * as s from "@db/schema";
 import { eq, desc, sql, and, ne } from "drizzle-orm";
+import { requireBatchTenant, requireTenantCompany } from "./tenant";
 
 const num = (v: unknown) => Number(v ?? 0);
 
@@ -96,15 +97,16 @@ const orgRouter = createRouter({
 /* ================= PRODUKCJA ================= */
 
 const productionRouter = createRouter({
-  batches: authedQuery.query(async () => {
+  batches: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
     const [batchRows, houseRows, farmRows, agg] = await Promise.all([
-      db.select().from(s.batches),
-      db.select().from(s.houses),
-      db.select().from(s.farms),
+      db.select().from(s.batches), db.select().from(s.houses),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
       loadAggregates(),
     ]);
-    return batchRows.map((b) => {
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    return batchRows.filter((b) => houseIds.has(b.houseId)).map((b) => {
       const k = kpisFromAgg(b, agg);
       const house = houseRows.find((h) => h.id === b.houseId) ?? null;
       const farm = house ? farmRows.find((f) => f.id === house.farmId) ?? null : null;
@@ -115,7 +117,8 @@ const productionRouter = createRouter({
 
   batchDetail: authedQuery
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.id);
       const db = getDb();
       const k = await batchKpis(input.id);
       if (!k) throw new Error("Rzut nie istnieje");
@@ -141,7 +144,8 @@ const productionRouter = createRouter({
       stdDevG: z.number().int().optional(), minG: z.number().int().optional(),
       maxG: z.number().int().optional(), operator: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       const db = getDb();
       const sd = input.stdDevG ?? Math.round(input.avgWeightG * 0.1);
       const cv = (sd / input.avgWeightG) * 100;
@@ -163,7 +167,8 @@ const productionRouter = createRouter({
       batchId: z.number(), name: z.string().min(1), criteria: z.string(),
       birdCount: z.number().int().min(1), avgWeightG: z.number().int().min(10),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       const [{ id }] = await getDb().insert(s.selects).values({
         batchId: input.batchId, name: input.name, criteria: input.criteria,
         origin: "manual", birdCount: input.birdCount, avgWeightG: input.avgWeightG,
@@ -174,7 +179,8 @@ const productionRouter = createRouter({
 
   regenerateSelects: authedQuery
     .input(z.object({ batchId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       const db = getDb();
       const [lastW] = await db.select().from(s.weighings)
         .where(eq(s.weighings.batchId, input.batchId))
@@ -218,15 +224,17 @@ async function generateDynamicSelects(batchId: number, avgWeightG: number) {
 /* ================= ŻYWIENIE ================= */
 
 const feedRouter = createRouter({
-  ingredients: authedQuery.query(async () => {
-    return getDb().select().from(s.feedIngredients).orderBy(s.feedIngredients.name);
+  ingredients: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
+    return getDb().select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId)).orderBy(s.feedIngredients.name);
   }),
 
-  recipes: authedQuery.query(async () => {
+  recipes: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
-    const recs = await db.select().from(s.recipes);
+    const recs = await db.select().from(s.recipes).where(eq(s.recipes.companyId, companyId));
     const items = await db.select().from(s.recipeItems);
-    const ings = await db.select().from(s.feedIngredients);
+    const ings = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
     return recs.map((r) => ({
       ...r,
       items: items.filter((i) => i.recipeId === r.id).map((i) => ({
@@ -243,9 +251,10 @@ const feedRouter = createRouter({
       strategy: z.enum(["cheapest", "maxGrowth", "balanced"]),
       ageGroup: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const companyId = requireTenantCompany(ctx.user!);
       const db = getDb();
-      const ings = await db.select().from(s.feedIngredients);
+      const ings = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
       const grains = ings.filter((i) => num(i.proteinPct) < 16 && num(i.energyKcal) > 2500);
       const proteins = ings.filter((i) => num(i.proteinPct) >= 20 && num(i.lysinePct) < 10);
       const fats = ings.filter((i) => num(i.fatPct) > 50);
@@ -312,6 +321,7 @@ const feedRouter = createRouter({
       const explanation = `Strategia: ${stratName} (${input.ageGroup}). Baza receptury: ${top}. Białko ${best.protein.toFixed(1)}% ≥ ${input.proteinMin}%, energia ${Math.round(best.energy)} kcal ≥ ${input.energyMin}, lizyna ${best.lys.toFixed(2)}% ≥ ${input.lysineMin}%. Dodano lizynę syntetyczną 0.42%, aby uzupełnić deficit aminokwasowy przy ograniczeniu udziału drogiej śruty białkowej. Wszystkie ograniczenia spełnione.`;
 
       const [{ id }] = await db.insert(s.recipes).values({
+        companyId,
         name: `${input.ageGroup} — ${stratName}`, ageGroup: input.ageGroup,
         strategy: input.strategy, costPerTon: best.cost.toFixed(2),
         proteinPct: best.protein.toFixed(2), energyKcal: Math.round(best.energy),
@@ -327,14 +337,18 @@ const feedRouter = createRouter({
 /* ================= ZDROWIE ================= */
 
 const healthRouter = createRouter({
-  treatments: authedQuery.query(async () => {
+  treatments: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
-    const [rows, batchRows] = await Promise.all([
+    const [rows, batchRows, houseRows, farmRows] = await Promise.all([
       db.select().from(s.treatments).orderBy(desc(s.treatments.startedAt)),
-      db.select().from(s.batches),
+      db.select().from(s.batches), db.select().from(s.houses), db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
     ]);
-    const codeOf = (id: number) => batchRows.find((b) => b.id === id)?.code ?? "?";
-    return rows.map((t) => {
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    const owned = batchRows.filter((b) => houseIds.has(b.houseId));
+    const ownedIds = new Set(owned.map((b) => b.id));
+    const codeOf = (id: number) => owned.find((b) => b.id === id)?.code ?? "?";
+    return rows.filter((t) => ownedIds.has(t.batchId)).map((t) => {
       const end = new Date(t.startedAt);
       end.setDate(end.getDate() + t.withdrawalDays);
       const daysLeft = Math.ceil((end.getTime() - Date.now()) / 86400000);
@@ -349,7 +363,8 @@ const healthRouter = createRouter({
       reason: z.string().optional(), withdrawalDays: z.number().int().min(0),
       vet: z.string().optional(), cost: z.number().min(0).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       const db = getDb();
       const [{ id }] = await db.insert(s.treatments).values({
         batchId: input.batchId, startedAt: input.startedAt, product: input.product,
@@ -366,19 +381,28 @@ const healthRouter = createRouter({
       return { id };
     }),
 
-  vaccinations: authedQuery.query(async () => {
+  vaccinations: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
-    const [rows, batchRows] = await Promise.all([
+    const [rows, batchRows, houseRows, farmRows] = await Promise.all([
       db.select().from(s.vaccinations).orderBy(s.vaccinations.day),
       db.select().from(s.batches),
+      db.select().from(s.houses),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
     ]);
-    const codeOf = (id: number) => batchRows.find((b) => b.id === id)?.code ?? "?";
-    return rows.map((v) => ({ ...v, batchCode: codeOf(v.batchId) }));
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    const owned = batchRows.filter((b) => houseIds.has(b.houseId));
+    const codeOf = (id: number) => owned.find((b) => b.id === id)?.code ?? "?";
+    const ownedIds = new Set(owned.map((b) => b.id));
+    return rows.filter((v) => ownedIds.has(v.batchId)).map((v) => ({ ...v, batchCode: codeOf(v.batchId) }));
   }),
 
   markVaccinationDone: authedQuery
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const [vaccination] = await getDb().select().from(s.vaccinations).where(eq(s.vaccinations.id, input.id));
+      if (!vaccination) throw new Error("Szczepienie nie istnieje");
+      await requireBatchTenant(ctx.user!, vaccination.batchId);
       await getDb().update(s.vaccinations).set({ done: true }).where(eq(s.vaccinations.id, input.id));
       return { ok: true };
     }),
@@ -387,15 +411,19 @@ const healthRouter = createRouter({
 /* ================= EKONOMIA ================= */
 
 const economicsRouter = createRouter({
-  batchPnl: authedQuery.query(async () => {
+  batchPnl: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
-    const [batchRows, allCosts, allSales, agg] = await Promise.all([
+    const [batchRows, allCosts, allSales, houseRows, farmRows, agg] = await Promise.all([
       db.select().from(s.batches),
       db.select().from(s.costs),
       db.select().from(s.sales),
+      db.select().from(s.houses),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
       loadAggregates(),
     ]);
-    return batchRows.map((b) => {
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    return batchRows.filter((b) => houseIds.has(b.houseId)).map((b) => {
       const costRows = allCosts.filter((c) => c.batchId === b.id);
       const saleRows = allSales.filter((x) => x.batchId === b.id);
       const byCat: Record<string, number> = {};
@@ -420,16 +448,20 @@ const economicsRouter = createRouter({
 /* ================= DASHBOARD ================= */
 
 const dashboardRouter = createRouter({
-  kpis: authedQuery.query(async () => {
+  kpis: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
-    const [batchRows, farms, agg] = await Promise.all([
+    const [batchRows, farms, houseRows, agg] = await Promise.all([
       db.select().from(s.batches).where(eq(s.batches.status, "active")),
-      db.select().from(s.farms).where(ne(s.farms.status, "archived")),
+      db.select().from(s.farms).where(and(eq(s.farms.companyId, companyId), ne(s.farms.status, "archived"))),
+      db.select().from(s.houses),
       loadAggregates(),
     ]);
+    const houseIds = new Set(houseRows.filter((h) => farms.some((f) => f.id === h.farmId)).map((h) => h.id));
+    const ownedBatches = batchRows.filter((b) => houseIds.has(b.houseId));
     let birds = 0, biomass = 0, fcrSum = 0, fcrW = 0, mortSum = 0;
     let epefSum = 0, withEpef = 0;
-    for (const b of batchRows) {
+    for (const b of ownedBatches) {
       const k = kpisFromAgg(b, agg);
       birds += b.currentCount;
       biomass += k.biomassKg;
@@ -438,7 +470,7 @@ const dashboardRouter = createRouter({
       if (k.epef > 0) { epefSum += k.epef; withEpef++; }
     }
     const countries = new Set(farms.map((f) => f.countryCode));
-    const n = Math.max(batchRows.length, 1);
+    const n = Math.max(ownedBatches.length, 1);
     withEpef = Math.max(withEpef, 1);
     return {
       activeBirds: birds,
@@ -446,16 +478,17 @@ const dashboardRouter = createRouter({
       avgFcr: fcrW > 0 ? fcrSum / fcrW : 0,
       avgMortality: mortSum / n,
       avgEpef: epefSum / withEpef,
-      activeBatches: batchRows.length,
+      activeBatches: ownedBatches.length,
       farmsCount: farms.length,
       countriesCount: countries.size,
     };
   }),
 
-  mapData: authedQuery.query(async () => {
+  mapData: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
     const [farms, houseRows, batchRows, agg] = await Promise.all([
-      db.select().from(s.farms).where(ne(s.farms.status, "archived")),
+      db.select().from(s.farms).where(and(eq(s.farms.companyId, companyId), ne(s.farms.status, "archived"))),
       db.select().from(s.houses),
       db.select().from(s.batches).where(eq(s.batches.status, "active")),
       loadAggregates(),
@@ -472,23 +505,29 @@ const dashboardRouter = createRouter({
     });
   }),
 
-  alerts: authedQuery.query(async () => {
+  alerts: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
     const alerts: Array<{ type: "critical" | "warning" | "info"; title: string; detail: string }> = [];
-    const [critSelects, treats, batchRows] = await Promise.all([
+    const [critSelects, treats, batchRows, houseRows, farmRows] = await Promise.all([
       db.select().from(s.selects).where(eq(s.selects.status, "critical")),
       db.select().from(s.treatments),
       db.select().from(s.batches),
+      db.select().from(s.houses),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
     ]);
-    const codeOf = (id: number) => batchRows.find((b) => b.id === id)?.code ?? "?";
-    for (const sel of critSelects.slice(0, 6)) {
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    const owned = batchRows.filter((b) => houseIds.has(b.houseId));
+    const ownedIds = new Set(owned.map((b) => b.id));
+    const codeOf = (id: number) => owned.find((b) => b.id === id)?.code ?? "?";
+    for (const sel of critSelects.filter((s) => ownedIds.has(s.batchId)).slice(0, 6)) {
       alerts.push({
         type: "critical",
         title: `${sel.name} (${codeOf(sel.batchId)})`,
         detail: `Śr. masa ${(sel.avgWeightG / 1000).toFixed(2)} kg — ${sel.criteria}. Wymaga analizy środowiska i żywienia.`,
       });
     }
-    for (const t of treats) {
+    for (const t of treats.filter((t) => ownedIds.has(t.batchId))) {
       const end = new Date(t.startedAt); end.setDate(end.getDate() + t.withdrawalDays);
       const left = Math.ceil((end.getTime() - Date.now()) / 86400000);
       if (left > 0) {

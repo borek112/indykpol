@@ -40,7 +40,7 @@ export default function DevAuthGate({ children }: { children: React.ReactNode })
         // Sonda sesji: authed endpoint bez cookie -> 401; z cookie -> 200/302.
         // Używamy /api/dev-login z redirect:manual — 302 oznacza, że endpoint istnieje
         // i ustawił sesję (dev). W production endpoint nie istnieje (404) -> abort.
-        const probe = await fetch("/api/trpc/org.structure?input=%7B%22json%22%3A%7B%22companyId%22%3A1%7D%7D", {
+        const probe = await fetch("/api/trpc/org.structure?input=%7B%22json%22%3A%7B%7D%7D", {
           credentials: "include",
         });
         if (cancelled) return;

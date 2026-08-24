@@ -10,6 +10,7 @@ import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import * as s from "@db/schema";
 import { desc, eq } from "drizzle-orm";
+import { requireTenantCompany } from "./tenant";
 
 const num = (v: unknown) => Number(v ?? 0);
 
@@ -169,8 +170,8 @@ export function buildBalanceReport(profile: ReturnType<typeof profileOf>, ageGro
   };
 }
 
-async function loadIngredients(db: ReturnType<typeof getDb>, mix: Mix) {
-  const all = await db.select().from(s.feedIngredients);
+async function loadIngredients(db: ReturnType<typeof getDb>, mix: Mix, companyId: number) {
+  const all = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
   const map = new Map(all.map((i) => [i.id, i]));
   return mix
     .filter((m) => map.has(m.ingredientId) && m.percent > 0)
@@ -201,9 +202,9 @@ function scoreMix(p: ReturnType<typeof profileOf>, prod: ReturnType<typeof produ
 
 export const nutritionRouter = createRouter({
   /* Symulator suwaków — błyskawiczna kalkulacja po stronie serwera */
-  simulate: authedQuery.input(mixInput).query(async ({ input }) => {
+  simulate: authedQuery.input(mixInput).query(async ({ input, ctx }) => {
     const db = getDb();
-    const items = await loadIngredients(db, input.items);
+    const items = await loadIngredients(db, input.items, requireTenantCompany(ctx.user!));
     const p = profileOf(items);
     const prod = productionFromProfile(p, input.ageGroup, input.sex);
     const total = items.reduce((a, i) => a + i.percent, 0);
@@ -227,10 +228,11 @@ export const nutritionRouter = createRouter({
   /* Inteligentne porównanie receptur A vs B */
   compare: authedQuery
     .input(z.object({ a: mixInput.shape.items, b: mixInput.shape.items, ageGroup: mixInput.shape.ageGroup }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
-      const ia = await loadIngredients(db, input.a);
-      const ib = await loadIngredients(db, input.b);
+      const companyId = requireTenantCompany(ctx.user!);
+      const ia = await loadIngredients(db, input.a, companyId);
+      const ib = await loadIngredients(db, input.b, companyId);
       const pa = profileOf(ia), pb = profileOf(ib);
       const ra = productionFromProfile(pa, input.ageGroup, "mixed"), rb = productionFromProfile(pb, input.ageGroup, "mixed");
       const sa = scoreMix(pa, ra), sb = scoreMix(pb, rb);
@@ -257,9 +259,9 @@ export const nutritionRouter = createRouter({
       birds: z.number().default(10000),
       days: z.number().default(140),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
-      const items = await loadIngredients(db, input.items);
+      const items = await loadIngredients(db, input.items, requireTenantCompany(ctx.user!));
       const p = profileOf(items);
       const prod = productionFromProfile(p, input.ageGroup);
       const finalWeightKg = (prod.adgG * input.days) / 1000;
@@ -283,12 +285,14 @@ export const nutritionRouter = createRouter({
     }),
 
   /* Raport ekspercki dla istniejącej receptury z bazy */
-  expertReport: authedQuery.input(z.object({ recipeId: z.number() })).query(async ({ input }) => {
+  expertReport: authedQuery.input(z.object({ recipeId: z.number() })).query(async ({ input, ctx }) => {
     const db = getDb();
+    const companyId = requireTenantCompany(ctx.user!);
     const [r] = await db.select().from(s.recipes).where(eq(s.recipes.id, input.recipeId));
     if (!r) return null;
+    if (r.companyId !== companyId) return null;
     const items = await db.select().from(s.recipeItems).where(eq(s.recipeItems.recipeId, r.id));
-    const ings = await db.select().from(s.feedIngredients);
+    const ings = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
     const map = new Map(ings.map((i) => [i.id, i]));
     const mix = items.map((it) => ({ ing: map.get(it.ingredientId)!, percent: num(it.percent) })).filter((x) => x.ing);
     const p = profileOf(mix);
@@ -311,21 +315,24 @@ export const nutritionRouter = createRouter({
   }),
 
   /* Lista surowców do panelu suwaków */
-  ingredients: authedQuery.query(async () => {
-    return getDb().select().from(s.feedIngredients).orderBy(desc(s.feedIngredients.stockTons));
+  ingredients: authedQuery.query(async ({ ctx }) => {
+    return getDb().select().from(s.feedIngredients)
+      .where(eq(s.feedIngredients.companyId, requireTenantCompany(ctx.user!)))
+      .orderBy(desc(s.feedIngredients.stockTons));
   }),
 
   /* Asystent kreatora — analiza mieszanki względem celów fazy + konkretne podpowiedzi korekt */
-  assist: authedQuery.input(mixInput).query(async ({ input }) => {
+  assist: authedQuery.input(mixInput).query(async ({ input, ctx }) => {
     const db = getDb();
-    const items = await loadIngredients(db, input.items);
+    const companyId = requireTenantCompany(ctx.user!);
+    const items = await loadIngredients(db, input.items, companyId);
     const p = profileOf(items);
     const prod = productionFromProfile(p, input.ageGroup, input.sex);
     const gk = resolveAgeGroup(input.ageGroup, input.sex) as AgeGroupKey;
     const g = AGE_GROUPS[gk] ?? AGE_GROUPS.finisher1;
     const total = items.reduce((a, i) => a + i.percent, 0);
 
-    const ings = await db.select().from(s.feedIngredients);
+    const ings = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
     const inMix = new Set(items.map((i) => i.ing.id));
     const tips: { type: "error" | "warn" | "ok" | "idea"; text: string }[] = [];
 
@@ -382,15 +389,17 @@ export const nutritionRouter = createRouter({
       genetics: z.string().max(128).optional(),
       status: z.enum(["draft", "active", "archived"]).default("active"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const items = await loadIngredients(db, input.items);
+      const companyId = requireTenantCompany(ctx.user!);
+      const items = await loadIngredients(db, input.items, companyId);
       const total = items.reduce((a, i) => a + i.percent, 0);
       if (total < 95 || total > 105) throw new Error(`Suma udziałów ${total.toFixed(1)}% — przed zapisem zbilansuj do ok. 100%`);
       const p = profileOf(items);
       const prod = productionFromProfile(p, input.ageGroup);
       const explanation = `Receptura autorska. ${explainMix(items, p, prod, input.ageGroup)}${input.note ? ` Notatka twórcy: ${input.note}` : ""}`;
       const [{ id }] = await db.insert(s.recipes).values({
+        companyId,
         name: input.name, ageGroup: input.ageGroup, strategy: "balanced",
         costPerTon: p.costPerTon.toFixed(2), proteinPct: p.protein.toFixed(2),
         energyKcal: Math.round(p.energy), lysinePct: p.lysine.toFixed(3), explanation,
@@ -409,19 +418,24 @@ export const nutritionRouter = createRouter({
     }),
 
   /* Usunięcie własnej receptury */
-  deleteRecipe: adminQuery.input(z.object({ recipeId: z.number() })).mutation(async ({ input }) => {
+  deleteRecipe: adminQuery.input(z.object({ recipeId: z.number() })).mutation(async ({ input, ctx }) => {
     const db = getDb();
+    const companyId = requireTenantCompany(ctx.user!);
+    const [recipe] = await db.select().from(s.recipes).where(eq(s.recipes.id, input.recipeId));
+    if (!recipe || recipe.companyId !== companyId) return { ok: false };
     await db.delete(s.recipeItems).where(eq(s.recipeItems.recipeId, input.recipeId));
     await db.delete(s.recipes).where(eq(s.recipes.id, input.recipeId));
     return { ok: true };
   }),
 
   /* EXPORT — receptury, surowce i programy żywienia jako JSON */
-  exportData: authedQuery.query(async () => {
+  exportData: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
+    const companyId = requireTenantCompany(ctx.user!);
     const [recs, ritems, ings, programs, stages] = await Promise.all([
-      db.select().from(s.recipes), db.select().from(s.recipeItems),
-      db.select().from(s.feedIngredients), db.select().from(s.feedPrograms), db.select().from(s.feedProgramStages),
+      db.select().from(s.recipes).where(eq(s.recipes.companyId, companyId)), db.select().from(s.recipeItems),
+      db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId)),
+      db.select().from(s.feedPrograms).where(eq(s.feedPrograms.companyId, companyId)), db.select().from(s.feedProgramStages),
     ]);
     return {
       format: "bloody-turkey-feed-v1",
@@ -442,15 +456,16 @@ export const nutritionRouter = createRouter({
       }).passthrough(),
       mode: z.enum(["merge", "replace"]).default("merge"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const companyId = requireTenantCompany(ctx.user!);
       const d = input.data;
       const report = { ingredientsAdded: 0, recipesAdded: 0, recipesSkipped: 0, errors: [] as string[] };
 
       if (!String(d.format).startsWith("bloody-turkey-feed")) throw new Error("Nieprawidłowy format pliku — oczekiwano eksportu Bloody Turkey (format bloody-turkey-feed-v1)");
 
       // surowce
-      const existing = await db.select().from(s.feedIngredients);
+      const existing = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
       const byName = new Map(existing.map((i) => [i.name.toLowerCase(), i]));
       if (d.ingredients) {
         for (const ing of d.ingredients) {
@@ -458,6 +473,7 @@ export const nutritionRouter = createRouter({
             const key = String(ing.name ?? "").toLowerCase();
             if (!key || byName.has(key)) continue;
             const [{ id }] = await db.insert(s.feedIngredients).values({
+              companyId,
               name: String(ing.name), countryCode: ing.countryCode ?? "PL",
               proteinPct: String(ing.proteinPct ?? 0), energyKcal: Number(ing.energyKcal ?? 0),
               lysinePct: String(ing.lysinePct ?? 0), methioninePct: String(ing.methioninePct ?? 0),
@@ -473,11 +489,12 @@ export const nutritionRouter = createRouter({
 
       // receptury (dopasowanie surowców po nazwie lub id)
       if (d.recipes) {
-        const existingRecs = await db.select().from(s.recipes);
+        const existingRecs = await db.select().from(s.recipes).where(eq(s.recipes.companyId, companyId));
         const recNames = new Set(existingRecs.map((r) => r.name.toLowerCase()));
         if (input.mode === "replace") {
-          await db.delete(s.recipeItems);
-          await db.delete(s.recipes);
+          const recipeIds = existingRecs.map((recipe) => recipe.id);
+          for (const recipeId of recipeIds) await db.delete(s.recipeItems).where(eq(s.recipeItems.recipeId, recipeId));
+          await db.delete(s.recipes).where(eq(s.recipes.companyId, companyId));
           recNames.clear();
         }
         const oldIdToIng = new Map((d.ingredients ?? []).map((i: any) => [Number(i.id), i]));
@@ -486,6 +503,7 @@ export const nutritionRouter = createRouter({
             const name = String(r.name ?? "Importowana").slice(0, 120);
             if (input.mode === "merge" && recNames.has(name.toLowerCase())) { report.recipesSkipped++; continue; }
             const [{ id }] = await db.insert(s.recipes).values({
+              companyId,
               name, ageGroup: String(r.ageGroup ?? "własna").slice(0, 64),
               strategy: ["cheapest", "maxGrowth", "balanced"].includes(r.strategy) ? r.strategy : "balanced",
               costPerTon: String(r.costPerTon ?? 0), proteinPct: String(r.proteinPct ?? 0),

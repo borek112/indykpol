@@ -35,7 +35,6 @@ export default function Structure() {
   const updateHouse = trpc.org.updateHouse.useMutation({ onSuccess: inv });
   const archiveHouse = trpc.org.archiveHouse.useMutation({ onSuccess: inv });
   const createBatch = trpc.org.createBatch.useMutation({ onSuccess: inv });
-  const createCompany = trpc.org.createCompany.useMutation({ onSuccess: () => utils.org.invalidate() });
   const createLine = trpc.org.createGeneticLine.useMutation({ onSuccess: inv });
 
   const [companyId, setCompanyId] = useState<number | null>(null);
@@ -52,9 +51,7 @@ export default function Structure() {
     code: "", geneticLine: "BUT Big 6", sex: "toms" as "toms" | "hens" | "mixed",
     initialCount: 10000, startDate: new Date().toISOString().slice(0, 10), chickSupplier: "", chickPrice: 1.6,
   });
-  const [companyForm, setCompanyForm] = useState({ name: "", countryCode: "PL" });
   const [lineForm, setLineForm] = useState({ name: "", supplier: "" });
-  const [showNewCompany, setShowNewCompany] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -73,9 +70,6 @@ export default function Structure() {
               <option key={c.id} value={c.id}>{countryFlag(c.countryCode)} {c.name}</option>
             ))}
           </select>
-          <button onClick={() => setShowNewCompany(!showNewCompany)} className="flex items-center gap-1 rounded-lg bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">
-            <Plus className="h-4 w-4" /> Firma
-          </button>
           <button
             onClick={() => setForm({ kind: "farm", companyId: activeCompanyId })}
             className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500"
@@ -84,23 +78,6 @@ export default function Structure() {
           </button>
         </div>
       </div>
-
-      {showNewCompany && (
-        <div className="rounded-xl border border-red-900/50 bg-zinc-900 p-5">
-          <h3 className="mb-3 font-semibold">Nowa organizacja (tenant)</h3>
-          <div className="flex flex-wrap gap-3">
-            <input className={`${inputCls} max-w-xs`} placeholder="Nazwa firmy" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} />
-            <select className={`${inputCls} w-48`} value={companyForm.countryCode} onChange={(e) => setCompanyForm({ ...companyForm, countryCode: e.target.value })}>
-              {Object.entries(COUNTRIES).map(([c, m]) => <option key={c} value={c}>{m.flag} {m.name}</option>)}
-            </select>
-            <button
-              disabled={createCompany.isPending || !companyForm.name}
-              onClick={() => { createCompany.mutate({ ...companyForm, baseCurrency: "EUR" }); setShowNewCompany(false); }}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium hover:bg-red-500 disabled:opacity-50"
-            >Utwórz</button>
-          </div>
-        </div>
-      )}
 
       {form?.kind === "farm" && (
         <div className="rounded-xl border border-red-900/50 bg-zinc-900 p-5">

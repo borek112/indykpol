@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import * as s from "@db/schema";
 import { eq, and, ne, desc } from "drizzle-orm";
 import { audit } from "./audit";
+import { requireBatchTenant, requireFarmTenant, requireHouseTenant, requireRequestedCompany, requireTenantCompany } from "./tenant";
 
 /* Harmonogram domyślny — Workflow Engine */
 export async function generateSchedule(batchId: number, startDate: string, sex: "toms" | "hens" | "mixed") {
@@ -45,31 +47,30 @@ export async function generateSchedule(batchId: number, startDate: string, sex: 
 
 export const orgRouter = createRouter({
   /* ------- firmy / tryb ------- */
-  companies: authedQuery.query(async () => {
-    const db = getDb();
-    const rows = await db.select().from(s.companies).where(ne(s.companies.status, "archived"));
-    return rows;
+  companies: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
+    return getDb().select().from(s.companies).where(and(eq(s.companies.id, companyId), ne(s.companies.status, "archived")));
   }),
 
   createCompany: authedQuery
     .input(z.object({ name: z.string().min(2), countryCode: z.string().length(2), baseCurrency: z.string().length(3).default("EUR") }))
-    .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.companies).values(input).$returningId();
-      await audit("companies", id, "create", { newValues: input });
-      return { id };
+    .mutation(async () => {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Firma jest przypisywana podczas rejestracji konta. Tworzenie dodatkowych tenantów nie jest dostępne w tym widoku." });
     }),
 
   /* ------- linie genetyczne ------- */
   geneticLines: authedQuery
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      requireRequestedCompany(ctx.user!, input.companyId);
       return getDb().select().from(s.geneticLines)
         .where(and(eq(s.geneticLines.companyId, input.companyId), ne(s.geneticLines.status, "archived")));
     }),
 
   createGeneticLine: authedQuery
     .input(z.object({ companyId: z.number(), name: z.string().min(2), supplier: z.string().optional(), notes: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      requireRequestedCompany(ctx.user!, input.companyId);
       const [{ id }] = await getDb().insert(s.geneticLines).values(input).$returningId();
       await audit("genetic_lines", id, "create", { newValues: input });
       return { id };
@@ -78,12 +79,11 @@ export const orgRouter = createRouter({
   /* ------- struktura ------- */
   structure: authedQuery
     .input(z.object({ companyId: z.number() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx }) => {
+      const companyId = requireTenantCompany(ctx.user!);
       const db = getDb();
-      const companies = input?.companyId
-        ? await db.select().from(s.companies).where(eq(s.companies.id, input.companyId))
-        : await db.select().from(s.companies).where(ne(s.companies.status, "archived"));
-      const farmRows = await db.select().from(s.farms).where(ne(s.farms.status, "archived"));
+      const companies = await db.select().from(s.companies).where(and(eq(s.companies.id, companyId), ne(s.companies.status, "archived")));
+      const farmRows = await db.select().from(s.farms).where(and(eq(s.farms.companyId, companyId), ne(s.farms.status, "archived")));
       const houseRows = await db.select().from(s.houses).where(ne(s.houses.status, "archived"));
       const sectorRows = await db.select().from(s.sectors).where(ne(s.sectors.status, "archived"));
       const batchRows = await db.select().from(s.batches).where(ne(s.batches.status, "archived"));
@@ -107,7 +107,8 @@ export const orgRouter = createRouter({
       companyId: z.number(), name: z.string().min(2), countryCode: z.string().length(2),
       city: z.string().min(2), lat: z.number(), lng: z.number(), capacity: z.number().int().min(0),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      requireRequestedCompany(ctx.user!, input.companyId);
       const [{ id }] = await getDb().insert(s.farms).values({
         ...input, countryCode: input.countryCode.toUpperCase(),
         lat: input.lat.toFixed(5), lng: input.lng.toFixed(5),
@@ -121,8 +122,9 @@ export const orgRouter = createRouter({
       id: z.number(), name: z.string().min(2).optional(), city: z.string().optional(),
       capacity: z.number().int().optional(), lat: z.number().optional(), lng: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireFarmTenant(ctx.user!, input.id);
       const [old] = await db.select().from(s.farms).where(eq(s.farms.id, input.id));
       const { id, ...rest } = input;
       const data: Record<string, string | number> = {};
@@ -138,8 +140,9 @@ export const orgRouter = createRouter({
 
   archiveFarm: authedQuery
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireFarmTenant(ctx.user!, input.id);
       const [old] = await db.select().from(s.farms).where(eq(s.farms.id, input.id));
       await db.update(s.farms).set({ status: "archived", updatedBy: "panel" }).where(eq(s.farms.id, input.id));
       await audit("farms", input.id, "delete", { oldValues: old });
@@ -152,7 +155,8 @@ export const orgRouter = createRouter({
       houseType: z.enum(["brooder", "finisher"]), areaM2: z.number().min(10),
       sectorCount: z.number().int().min(0).max(8).default(0),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireFarmTenant(ctx.user!, input.farmId);
       const db = getDb();
       const [{ id }] = await db.insert(s.houses).values({
         farmId: input.farmId, name: input.name, houseType: input.houseType,
@@ -174,7 +178,8 @@ export const orgRouter = createRouter({
       id: z.number(), name: z.string().min(1).optional(),
       areaM2: z.number().optional(), maxDensityKgM2: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireHouseTenant(ctx.user!, input.id);
       const db = getDb();
       const [old] = await db.select().from(s.houses).where(eq(s.houses.id, input.id));
       const data: Record<string, string> = {};
@@ -188,7 +193,8 @@ export const orgRouter = createRouter({
 
   archiveHouse: authedQuery
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireHouseTenant(ctx.user!, input.id);
       const db = getDb();
       const [old] = await db.select().from(s.houses).where(eq(s.houses.id, input.id));
       await db.update(s.houses).set({ status: "archived", updatedBy: "panel" }).where(eq(s.houses.id, input.id));
@@ -203,7 +209,8 @@ export const orgRouter = createRouter({
       sex: z.enum(["toms", "hens", "mixed"]), initialCount: z.number().int().min(1),
       startDate: z.string(), chickSupplier: z.string().optional(), chickPrice: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireHouseTenant(ctx.user!, input.houseId);
       const db = getDb();
       const growDays = input.sex === "toms" ? 140 : input.sex === "hens" ? 112 : 126;
       const end = new Date(input.startDate); end.setDate(end.getDate() + growDays);
@@ -221,7 +228,8 @@ export const orgRouter = createRouter({
 
   closeBatch: authedQuery
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.id);
       const db = getDb();
       const [old] = await db.select().from(s.batches).where(eq(s.batches.id, input.id));
       await db.update(s.batches).set({ status: "closed", currentCount: 0, soldCount: old.currentCount + old.soldCount, updatedBy: "panel" }).where(eq(s.batches.id, input.id));
@@ -232,7 +240,8 @@ export const orgRouter = createRouter({
   /* ------- harmonogram ------- */
   schedule: authedQuery
     .input(z.object({ batchId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.batchId);
       return getDb().select().from(s.scheduleEvents)
         .where(eq(s.scheduleEvents.batchId, input.batchId))
         .orderBy(s.scheduleEvents.day);
@@ -240,40 +249,54 @@ export const orgRouter = createRouter({
 
   toggleScheduleEvent: authedQuery
     .input(z.object({ id: z.number(), done: z.boolean() }))
-    .mutation(async ({ input }) => {
-      await getDb().update(s.scheduleEvents)
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const [event] = await db.select().from(s.scheduleEvents).where(eq(s.scheduleEvents.id, input.id));
+      if (!event) throw new Error("Zdarzenie harmonogramu nie istnieje");
+      await requireBatchTenant(ctx.user!, event.batchId);
+      await db.update(s.scheduleEvents)
         .set({ done: input.done, doneAt: input.done ? new Date() : null })
         .where(eq(s.scheduleEvents.id, input.id));
       await audit("schedule_events", input.id, "update", { newValues: { done: input.done } });
       return { ok: true };
     }),
 
-  upcomingSchedule: authedQuery.query(async () => {
+  upcomingSchedule: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
-    const [rows, batchRows] = await Promise.all([
+    const [rows, batchRows, houseRows, farmRows] = await Promise.all([
       db.select().from(s.scheduleEvents).where(eq(s.scheduleEvents.done, false)).orderBy(s.scheduleEvents.day),
       db.select().from(s.batches),
+      db.select().from(s.houses),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
     ]);
-    const codeOf = (id: number) => batchRows.find((b) => b.id === id)?.code ?? "?";
-    return rows.map((r) => ({ ...r, batchCode: codeOf(r.batchId) }));
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    const owned = batchRows.filter((b) => houseIds.has(b.houseId));
+    const ownedIds = new Set(owned.map((b) => b.id));
+    const codeOf = (id: number) => owned.find((b) => b.id === id)?.code ?? "?";
+    return rows.filter((r) => ownedIds.has(r.batchId)).map((r) => ({ ...r, batchCode: codeOf(r.batchId) }));
   }),
 
   /* ------- transfery ------- */
-  transfers: authedQuery.query(async () => {
+  transfers: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
     const [rows, batchRows, houseRows, farmRows] = await Promise.all([
       db.select().from(s.transfers).orderBy(desc(s.transfers.transferDate)),
       db.select().from(s.batches),
       db.select().from(s.houses),
-      db.select().from(s.farms),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
     ]);
+    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
+    const owned = batchRows.filter((b) => houseIds.has(b.houseId));
+    const ownedIds = new Set(owned.map((b) => b.id));
     const loc = (batchId: number) => {
-      const b = batchRows.find((x) => x.id === batchId);
+      const b = owned.find((x) => x.id === batchId);
       const h = b && houseRows.find((x) => x.id === b.houseId);
       const f = h && farmRows.find((x) => x.id === h.farmId);
       return b ? `${b.code} · ${h?.name ?? "?"} · ${f?.city ?? "?"}` : "?";
     };
-    return rows.map((t) => ({ ...t, source: loc(t.sourceBatchId), target: loc(t.targetBatchId) }));
+    return rows.filter((t) => ownedIds.has(t.sourceBatchId) && ownedIds.has(t.targetBatchId)).map((t) => ({ ...t, source: loc(t.sourceBatchId), target: loc(t.targetBatchId) }));
   }),
 
   executeTransfer: authedQuery
@@ -283,7 +306,9 @@ export const orgRouter = createRouter({
       durationMin: z.number().int().optional(), transportMortality: z.number().int().min(0).default(0),
       signatureFrom: z.string().optional(), signatureTo: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireBatchTenant(ctx.user!, input.sourceBatchId);
+      await requireHouseTenant(ctx.user!, input.targetHouseId);
       const db = getDb();
       const [src] = await db.select().from(s.batches).where(eq(s.batches.id, input.sourceBatchId));
       if (!src) throw new Error("Rzut źródłowy nie istnieje");
@@ -336,18 +361,19 @@ export const orgRouter = createRouter({
     }),
 
   /* ------- magazyn / silosy ------- */
-  warehouseOverview: authedQuery.query(async () => {
+  warehouseOverview: authedQuery.query(async ({ ctx }) => {
+    const companyId = requireTenantCompany(ctx.user!);
     const db = getDb();
     const [silos, wh, farmRows, recipes] = await Promise.all([
       db.select().from(s.silos).where(ne(s.silos.status, "archived")),
       db.select().from(s.warehouses).where(ne(s.warehouses.status, "archived")),
-      db.select().from(s.farms),
-      db.select().from(s.recipes),
+      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
+      db.select().from(s.recipes).where(eq(s.recipes.companyId, companyId)),
     ]);
     const farmOf = (id: number) => farmRows.find((f) => f.id === id);
     return {
-      silos: silos.map((x) => ({ ...x, farm: farmOf(x.farmId), recipe: recipes.find((r) => r.id === x.recipeId) ?? null })),
-      warehouses: wh.map((x) => ({ ...x, farm: farmOf(x.farmId) })),
+      silos: silos.filter((x) => farmOf(x.farmId)).map((x) => ({ ...x, farm: farmOf(x.farmId), recipe: recipes.find((r) => r.id === x.recipeId) ?? null })),
+      warehouses: wh.filter((x) => farmOf(x.farmId)).map((x) => ({ ...x, farm: farmOf(x.farmId) })),
     };
   }),
 

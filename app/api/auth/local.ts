@@ -6,7 +6,6 @@ import { Session } from "@contracts/constants";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
 import { getSessionCookieOptions } from "../lib/cookies";
-import { env } from "../lib/env";
 import { getDb } from "../queries/connection";
 import { hashPassword, verifyPassword } from "./passwords";
 import { signSessionToken, verifySessionToken } from "./session";
@@ -55,11 +54,7 @@ export async function registerLocalUser(input: {
 
   const db = getDb();
   return db.transaction(async (tx) => {
-    const existingUsers = await tx.select({ id: schema.users.id }).from(schema.users).limit(1);
-    const [demoCompany] = !env.isProduction && existingUsers.length === 0
-      ? await tx.select().from(schema.companies).limit(1)
-      : [];
-    const companyId = demoCompany?.id ?? (await tx.insert(schema.companies).values({
+    const companyId = (await tx.insert(schema.companies).values({
       name: input.companyName.trim(),
       countryCode: input.countryCode.trim().toUpperCase(),
     }).$returningId())[0].id;
