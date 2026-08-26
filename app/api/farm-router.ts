@@ -540,6 +540,29 @@ const dashboardRouter = createRouter({
     }
     return alerts;
   }),
+
+  trends: authedQuery.query(async () => {
+    const db = getDb();
+    const [batchRows, agg] = await Promise.all([
+      db.select().from(s.batches).where(eq(s.batches.status, "active")),
+      loadAggregates(),
+    ]);
+
+    return batchRows
+      .map((batch) => {
+        const k = kpisFromAgg(batch, agg);
+        return {
+          batchId: batch.id,
+          code: batch.code,
+          ageDays: k.ageDays,
+          avgWeightG: Math.round(k.avgWeightG),
+          adg: k.ageDays > 0 ? k.avgWeightG / k.ageDays : 0,
+        };
+      })
+      .filter((row) => row.ageDays > 0)
+      .sort((a, b) => b.adg - a.adg)
+      .slice(0, 6);
+  }),
 });
 
 export const farmRouter = createRouter({

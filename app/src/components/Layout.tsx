@@ -10,7 +10,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/providers/trpc";
 import { tierDef, TIERS, setTier } from "@/lib/editions";
-import { getProductMode, productModeLabel } from "@/lib/product-mode";
+import { getProductMode, productModeLabel, setProductMode } from "@/lib/product-mode";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -55,37 +55,46 @@ function Breadcrumbs() {
   );
 }
 
-
 function TierSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const cur = tierDef();
   const mode = getProductMode();
+
   useEffect(() => {
-    const onClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold ${cur.badge}`}>
+      <button onClick={() => setOpen(!open)} className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold ${cur.badge}`}>
         <Crown className="h-3.5 w-3.5" /> {cur.name}
       </button>
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl">
           <div className="border-b border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-400">Wersja licencji</div>
           {TIERS.map((t) => (
-            <button key={t.key} onClick={() => setTier(t.key)}
-              className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-zinc-800 ${t.key === cur.key ? "bg-zinc-800/60" : ""}`}>
+            <button key={t.key} onClick={() => setTier(t.key)} className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-zinc-800 ${t.key === cur.key ? "bg-zinc-800/60" : ""}`}>
               <span className={t.color}>{t.name}</span>
               {t.key === cur.key && <span className="text-[10px] font-bold text-emerald-400">AKTYWNA</span>}
             </button>
           ))}
           <div className="border-t border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-400">Tryb produktu</div>
           <div className="px-4 pb-3 text-xs text-zinc-400">
-            <div className="font-semibold text-zinc-200">{productModeLabel(mode)}</div>
-            <p className="mt-1 leading-relaxed">Tryb jest określany przez konfigurację wdrożenia. Nie można przełączyć danych demonstracyjnych i firmowych wyłącznie w interfejsie.</p>
+            <div className="mb-2 font-semibold text-zinc-200">{productModeLabel(mode)}</div>
+            <button onClick={() => setProductMode("demo")} className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "demo" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}>
+              <span>DEMO</span>
+              <span>{mode === "demo" ? "AKTYWNE" : "Wybierz"}</span>
+            </button>
+            <button onClick={() => setProductMode("production")} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "production" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}>
+              <span>PRODUCTION</span>
+              <span>{mode === "production" ? "AKTYWNE" : "Wybierz"}</span>
+            </button>
+            <p className="mt-2 leading-relaxed text-zinc-500">Przełączaj dane demonstracyjne i firmowe bez resetowania aplikacji.</p>
           </div>
         </div>
       )}
@@ -128,8 +137,7 @@ function NotificationBell() {
           <div className="max-h-80 overflow-y-auto">
             {(q.data ?? []).length === 0 && <div className="px-4 py-6 text-center text-sm text-zinc-500">Brak powiadomień</div>}
             {(q.data ?? []).map((n) => (
-              <button key={n.id} onClick={() => { setOpen(false); if (n.link) nav(n.link); }}
-                className={`block w-full border-b border-zinc-800/60 px-4 py-3 text-left hover:bg-zinc-800/60 ${n.read ? "opacity-50" : ""}`}>
+              <button key={n.id} onClick={() => { setOpen(false); if (n.link) nav(n.link); }} className={`block w-full border-b border-zinc-800/60 px-4 py-3 text-left hover:bg-zinc-800/60 ${n.read ? "opacity-50" : ""}`}>
                 <span className={`mr-2 inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${sevCls[n.severity]}`}>{n.severity}</span>
                 <span className="text-sm font-medium text-zinc-200">{n.title}</span>
                 {n.body && <div className="mt-0.5 text-xs text-zinc-500">{n.body}</div>}
@@ -146,9 +154,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const mode = getProductMode();
+
   useEffect(() => {
     document.documentElement.classList.add("dark");
   }, []);
+
   useEffect(() => setMobileOpen(false), [loc.pathname]);
 
   const sidebar = (
@@ -173,7 +183,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               key={n.to}
               to={n.to}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-              active ? "border border-red-500/20 bg-red-600/15 text-red-300 shadow-[inset_3px_0_0_#ef4444]" : "border border-transparent text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
+                active ? "border border-red-500/20 bg-red-600/15 text-red-300 shadow-[inset_3px_0_0_#ef4444]" : "border border-transparent text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
               }`}
             >
               <n.icon className="h-4 w-4" />
@@ -195,19 +205,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Toaster position="top-right" richColors />
       <CommandPalette />
 
-      {/* mobile top bar */}
       <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-800/90 bg-[#11161f]/95 px-4 py-3 backdrop-blur lg:hidden">
         <button onClick={() => setMobileOpen(true)}><Menu className="h-5 w-5" /></button>
         <span className="text-sm font-bold">BLOODY TURKEY <span className="text-zinc-500">ERP</span></span>
         <div className="ml-auto"><NotificationBell /></div>
       </div>
 
-      {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-zinc-800/90 lg:block">
         {sidebar}
       </aside>
 
-      {/* desktop top bar: breadcrumb + search + bell */}
       <div className="sticky top-0 z-20 hidden items-center gap-4 border-b border-zinc-800/90 bg-[#0d1117]/90 px-8 py-3 backdrop-blur lg:ml-64 lg:flex">
         <Breadcrumbs />
         <div className="ml-auto flex items-center gap-2">
@@ -226,7 +233,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />

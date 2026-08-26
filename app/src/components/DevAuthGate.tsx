@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
+import { getProductMode } from "@/lib/product-mode";
 
 /* Demo auth bootstrap.
    Wykrywa brak ważnej sesji przez publiczną sondę /api/dev-login (HEAD-like GET
@@ -10,7 +11,7 @@ import { useLocation } from "react-router";
    i odświeżamy zapytania tRPC). */
 
 const DEV = import.meta.env.DEV;
-const AUTO_LOGIN = DEV || import.meta.env.VITE_DEMO_MODE === "true";
+const AUTO_LOGIN = DEV || getProductMode() === "demo";
 const DEMO_LOGIN_PATH = DEV ? "/api/dev-login" : "/api/demo-login";
 const PENDING_KEY = "bte_dev_auth_pending";
 
