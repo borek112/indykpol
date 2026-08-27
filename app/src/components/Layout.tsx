@@ -63,7 +63,9 @@ function TierSwitcher() {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -71,26 +73,41 @@ function TierSwitcher() {
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)} className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold ${cur.badge}`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold ${cur.badge}`}
+      >
         <Crown className="h-3.5 w-3.5" /> {cur.name}
       </button>
+
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl">
           <div className="border-b border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-400">Wersja licencji</div>
           {TIERS.map((t) => (
-            <button key={t.key} onClick={() => setTier(t.key)} className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-zinc-800 ${t.key === cur.key ? "bg-zinc-800/60" : ""}`}>
+            <button
+              key={t.key}
+              onClick={() => setTier(t.key)}
+              className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-zinc-800 ${t.key === cur.key ? "bg-zinc-800/60" : ""}`}
+            >
               <span className={t.color}>{t.name}</span>
               {t.key === cur.key && <span className="text-[10px] font-bold text-emerald-400">AKTYWNA</span>}
             </button>
           ))}
+
           <div className="border-t border-zinc-800 px-4 py-2 text-xs font-semibold text-zinc-400">Tryb produktu</div>
           <div className="px-4 pb-3 text-xs text-zinc-400">
             <div className="mb-2 font-semibold text-zinc-200">{productModeLabel(mode)}</div>
-            <button onClick={() => setProductMode("demo")} className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "demo" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}>
+            <button
+              onClick={() => setProductMode("demo")}
+              className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "demo" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}
+            >
               <span>DEMO</span>
               <span>{mode === "demo" ? "AKTYWNE" : "Wybierz"}</span>
             </button>
-            <button onClick={() => setProductMode("production")} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "production" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}>
+            <button
+              onClick={() => setProductMode("production")}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${mode === "production" ? "bg-emerald-600/15 text-emerald-400" : "bg-zinc-800 text-zinc-300"}`}
+            >
               <span>PRODUCTION</span>
               <span>{mode === "production" ? "AKTYWNE" : "Wybierz"}</span>
             </button>
@@ -175,6 +192,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <X className="h-5 w-5 text-zinc-400" />
         </button>
       </div>
+
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {NAV.filter((n) => tierDef().routes.some((r) => (r === "/" ? n.to === "/" : n.to.startsWith(r)))).map((n) => {
           const active = n.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(n.to) || (n.to.startsWith("/erp") && loc.pathname.startsWith("/erp"));
@@ -183,7 +201,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               key={n.to}
               to={n.to}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                active ? "border border-red-500/20 bg-red-600/15 text-red-300 shadow-[inset_3px_0_0_#ef4444]" : "border border-transparent text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
+                active
+                  ? "border border-red-500/20 bg-red-600/15 text-red-300 shadow-[inset_3px_0_0_#ef4444]"
+                  : "border border-transparent text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
               }`}
             >
               <n.icon className="h-4 w-4" />
@@ -192,6 +212,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+
       <div className="border-t border-zinc-800 px-5 py-4 text-[11px] leading-relaxed text-zinc-500">
         Bloody Turkey Group S.A.
         <br />
@@ -246,3 +267,4 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
