@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
+import { getProductMode, productModeLabel } from "@/lib/product-mode";
 
 const inputCls =
   "w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500";
@@ -41,13 +42,115 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`rounded-lg border px-2 py-1 text-sm font-bold ${cls}`}>{score}/100</span>;
 }
 
+function buildRecipeAlerts(assistData: any, total: number, activeCount: number) {
+  const alerts: { level: "info" | "warning" | "critical"; title: string; text: string }[] = [];
+
+  if (activeCount === 0) {
+    alerts.push({
+      level: "info",
+      title: "Rozpocznij kompletowanie receptury",
+      text: "Dodaj minimum 2–3 surowce i ustaw udział procentowy, aby system ocenił mieszankę według fazy żywienia.",
+    });
+    return alerts;
+  }
+
+  if (Math.abs(total - 100) > 5) {
+    alerts.push({
+      level: "warning",
+      title: "Suma udziałów odbiega od 100%",
+      text: `Aktualnie ${total.toFixed(1)}%. Warto doprowadzić udział do 100%, aby receptura była spójna operacyjnie.`,
+    });
+  }
+
+  if (assistData) {
+    if (assistData.profile?.protein < (assistData.targets?.protein ?? 0) * 0.96) {
+      alerts.push({
+        level: "warning",
+        title: "Białko poniżej celu",
+        text: `Profil receptury: ${Number(assistData.profile?.protein ?? 0).toFixed(1)}% przy wymaganym ${Number(assistData.targets?.protein ?? 0).toFixed(1)}%.`,
+      });
+    }
+
+    if (assistData.profile?.energy < (assistData.targets?.energy ?? 0) * 0.97) {
+      alerts.push({
+        level: "warning",
+        title: "Energia poniżej rekomendacji",
+        text: `Energia ${Number(assistData.profile?.energy ?? 0).toFixed(0)} kcal/kg przy celu ${Number(assistData.targets?.energy ?? 0).toFixed(0)} kcal/kg.`,
+      });
+    }
+
+    if (assistData.production?.fcr > 2.5) {
+      alerts.push({
+        level: "critical",
+        title: "FCR jest za wysoki",
+        text: `Obecny FCR ${Number(assistData.production?.fcr ?? 0).toFixed(2)} wskazuje na warunki poniżej oczekiwań dla tej fazy produkcji.`,
+      });
+    }
+
+    if (assistData.production?.metabolicRisk > 25) {
+      alerts.push({
+        level: "critical",
+        title: "Ryzyko metaboliczne rośnie",
+        text: `Metabolic risk wynosi ${Number(assistData.production?.metabolicRisk ?? 0).toFixed(0)}%. Rozważ korektę składników i zwiększenie kontroli fazy.`,
+      });
+    }
+
+    if (assistData.profile?.costPerTon > 1600) {
+      alerts.push({
+        level: "warning",
+        title: "Mieszanka jest droższa od benchmarku",
+        text: `Koszt tony ${Number(assistData.profile?.costPerTon ?? 0).toFixed(0)} EUR może ograniczać rentowność przy tej linii genetycznej.`,
+      });
+    }
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({
+      level: "info",
+      title: "Receptura w dobrej kondycji",
+      text: "System nie wykrył ostrych odchyleń. W dalszej kolejności warto zatwierdzić wariant i przejść do analizy produkcyjnej.",
+    });
+  }
+
+  return alerts.slice(0, 4);
+}
+
 export default function Feed() {
   const [tab, setTab] = useState<Tab>("optimizer");
+  const mode = getProductMode();
+  const premiumHighlights = [
+    { label: "Receptury", value: "AI + ekspercki scoring" },
+    { label: "Kontrola kosztu", value: "benchmark / korekta" },
+    { label: "Raport prod.", value: "FCR / ADG / EPEF" },
+  ];
+
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-zinc-950 via-zinc-900 to-amber-500/5 p-4 shadow-[0_0_0_1px_rgba(251,191,36,0.08)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300">
+              Premium Nutrition Suite
+            </div>
+            <h1 className="text-2xl font-bold text-white">Żywienie — Feed Formulation Engine</h1>
+          </div>
+          <div className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${mode === "demo" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-red-500/40 bg-red-500/10 text-red-300"}`}>
+            {productModeLabel(mode)}
+          </div>
+        </div>
+        <p className="mt-2 text-sm text-zinc-400">Baza surowców, optymalizator, raporty eksperckie, historia zmian i porównywarka receptur — przygotowane dla pracy operacyjnej i prezentacji klienta.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {premiumHighlights.map((item) => (
+            <div key={item.label} className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{item.label}</div>
+              <div className="mt-2 text-sm font-semibold text-emerald-300">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Żywienie — Feed Formulation Engine</h1>
           <p className="text-sm text-zinc-500">Baza surowców, optymalizator, raporty eksperckie, historia zmian i porównywarka receptur</p>
         </div>
       </div>
@@ -109,6 +212,13 @@ function RecipeCreator() {
     { enabled: liveItems.length > 0 },
   );
 
+  const total = mix.reduce((a, m) => a + m.percent, 0);
+
+  const recipeAlerts = useMemo(
+    () => buildRecipeAlerts(assist.data, total, active.length),
+    [assist.data, total, active.length],
+  );
+
   const create = trpc.nutrition.createRecipe.useMutation({
     onSuccess: (d) => {
       toast.success(`Receptura zapisana — ocena ${d.score}/100`);
@@ -118,7 +228,6 @@ function RecipeCreator() {
     onError: (e) => toast.error(e.message),
   });
 
-  const total = mix.reduce((a, m) => a + m.percent, 0);
   const list = ings.data ?? [];
   // Ten sam surowiec może istnieć w katalogu pod różnymi identyfikatorami.
   // W jednej mieszance pokazujemy go tylko raz, aby nie dublować pozycji.
@@ -190,6 +299,27 @@ function RecipeCreator() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportFile(f); e.target.value = ""; }} />
         </div>
       </div>
+
+      {recipeAlerts.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {recipeAlerts.map((alert) => (
+            <div
+              key={alert.title}
+              className={`rounded-xl border p-3 ${
+                alert.level === "critical"
+                  ? "border-red-500/30 bg-red-500/5 text-red-200"
+                  : alert.level === "warning"
+                    ? "border-amber-500/30 bg-amber-500/5 text-amber-200"
+                    : "border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
+              }`}
+            >
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] opacity-80">{alert.level}</div>
+              <div className="text-sm font-semibold">{alert.title}</div>
+              <p className="mt-1 text-xs leading-relaxed opacity-90">{alert.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-5">
         {/* lewa kolumna — skład */}

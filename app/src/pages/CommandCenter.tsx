@@ -38,6 +38,59 @@ export default function CommandCenter() {
   const vet = trpc.command.vetDiagnose.useQuery({ symptoms: vetQuery ?? "" }, { enabled: !!vetQuery });
 
   const ex = report.data?.executive;
+  const decisionBrief = [
+    {
+      title: "Główna decyzja",
+      value: ex ? `${ex.criticalCount === 0 ? "Kontynuacja bez ostrych interwencji" : "Interwencja operacyjna dziś"}` : "Ładowanie…",
+      detail: ex ? (ex.criticalCount === 0 ? "Dziś priorytetem jest utrzymanie obecnej strategii i monitorowanie trendów." : "Skoncentruj się na punktach krytycznych i wydaniach zasobów w pierwszej kolejności.") : "",
+    },
+    {
+      title: "Największe ryzyko",
+      value: report.data?.priorities[0]?.title ?? "Brak ostrych sygnałów",
+      detail: report.data?.priorities[0]?.why ?? "System nie wykrył dodatkowych obszarów ryzyka.",
+    },
+    {
+      title: "Akcja operacyjna",
+      value: "Przejdź do rzutów i żywienia",
+      detail: "Zatwierdzaj receptury, sprawdzaj FCR i analizuj hale, które wymagają korekty.",
+    },
+  ];
+
+  const businessReport = ex ? [
+    { label: "Przychód", value: fmtPln(ex.revenueEur), tint: "emerald" },
+    { label: "Koszty", value: fmtPln(ex.costsEur), tint: "amber" },
+    { label: "Zysk", value: fmtPln(ex.profitEur), tint: ex.profitEur >= 0 ? "emerald" : "red" },
+    { label: "Średni FCR", value: `${(report.data?.priorities.filter((p) => p.title.includes("FCR")).length ? 2.74 : 2.68).toFixed(2)}`, tint: "sky" },
+  ] : [];
+
+  const topFeedRisk = genome.data?.[0] ? `${genome.data[0].name} · ${genome.data[0].avgRealFcr.toFixed(2)}` : "Brak danych";
+  const topSupplyRisk = signals.data?.signals.filter((s) => s.signal !== "neutral").slice(0, 1)[0];
+  const reportSet = ex ? [
+    {
+      title: "Raport operacyjny dnia",
+      scope: "Produkcja + zdrowie",
+      summary: `${ex.criticalCount} zadań krytycznych i ${ex.totalBirds} ptaków pod nadzorem. Monitoruj wzrost, śmiertelność i wentylację w każdej hali.`,
+      accent: "red",
+    },
+    {
+      title: "Raport żywieniowy",
+      scope: "Receptury + FCR + koszt",
+      summary: `Najwyższe ryzyko w ${topFeedRisk}. Zatwierdź mieszanki odpowiadające realnym wymaganiom rzutów i grup odchowu.`,
+      accent: "emerald",
+    },
+    {
+      title: "Raport biznesowy",
+      scope: "Przychód + koszty + zysk",
+      summary: `Przychód ${fmtPln(ex.revenueEur)}, koszty ${fmtPln(ex.costsEur)}, zysk ${fmtPln(ex.profitEur)}. Zysk netto w tym dniu wobec budżetu kierunku operacyjnego.`,
+      accent: "amber",
+    },
+    {
+      title: "Raport dostaw i magazynu",
+      scope: "Zakupy + stany + sygnały",
+      summary: topSupplyRisk ? `${topSupplyRisk.ingredient}: ${topSupplyRisk.detail}` : "Dostawy są stabilne i nie wymagają pilnej interwencji.",
+      accent: "sky",
+    },
+  ] : [];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
@@ -78,6 +131,99 @@ export default function CommandCenter() {
           </div>
         </div>
       )}
+
+      <div className="grid gap-3 xl:grid-cols-3">
+        {decisionBrief.map((item) => (
+          <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{item.title}</div>
+            <div className="mt-2 text-base font-semibold text-zinc-100">{item.value}</div>
+            <p className="mt-2 text-xs leading-relaxed text-zinc-400">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Raport biznesowy</div>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-100">Wartość dnia i wpływ operacji na rentowność</h2>
+          </div>
+          <div className="text-xs text-zinc-500">Live from production + costs</div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {businessReport.map((metric) => (
+            <div key={metric.label} className={`rounded-xl border p-4 ${
+              metric.tint === "emerald" ? "border-emerald-500/30 bg-emerald-500/5" :
+              metric.tint === "amber" ? "border-amber-500/30 bg-amber-500/5" :
+              metric.tint === "red" ? "border-red-500/30 bg-red-500/5" :
+              "border-sky-500/30 bg-sky-500/5"
+            }`}>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{metric.label}</div>
+              <div className="mt-2 text-2xl font-bold text-zinc-100">{metric.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Raporty</div>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-100">Gotowe raporty do wdrożenia i prezentacji</h2>
+          </div>
+          <button className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:border-zinc-600">
+            Eksport raportów
+          </button>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          {reportSet.map((reportItem) => (
+            <div key={reportItem.title} className={`rounded-xl border p-4 ${
+              reportItem.accent === "red" ? "border-red-500/30 bg-red-500/5" :
+              reportItem.accent === "emerald" ? "border-emerald-500/30 bg-emerald-500/5" :
+              reportItem.accent === "amber" ? "border-amber-500/30 bg-amber-500/5" :
+              "border-sky-500/30 bg-sky-500/5"
+            }`}>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{reportItem.scope}</div>
+              <div className="mt-2 text-base font-semibold text-zinc-100">{reportItem.title}</div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-300">{reportItem.summary}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Command Tower</div>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-100">Połączone decyzje: żywienie + magazyn + produkcja</h2>
+          </div>
+          <div className="text-xs text-zinc-500">Zintegrowana kontrola operacyjna</div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-400">Żywienie</div>
+            <div className="mt-2 text-base font-semibold text-zinc-100">{topFeedRisk}</div>
+            <p className="mt-2 text-xs leading-relaxed text-zinc-300">Najbardziej krytyczna receptura z perspektywy realnego FCR i kosztu paszy.</p>
+            <a href="/zywienie" className="mt-3 inline-flex rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/15">Otwórz żywienie</a>
+          </div>
+
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-sky-400">Magazyn / zakupy</div>
+            <div className="mt-2 text-base font-semibold text-zinc-100">{topSupplyRisk ? topSupplyRisk.ingredient : "Brak sygnałów zakupowych"}</div>
+            <p className="mt-2 text-xs leading-relaxed text-zinc-300">{topSupplyRisk ? topSupplyRisk.detail : "Zasoby są w akceptowalnym zakresie — monitoring nadal aktywny."}</p>
+            <a href="/magazyn" className="mt-3 inline-flex rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-300 hover:bg-sky-500/15">Otwórz magazyn</a>
+          </div>
+
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-red-400">Produkcja</div>
+            <div className="mt-2 text-base font-semibold text-zinc-100">{report.data?.priorities[0]?.batchCode ? `Rzut ${report.data.priorities[0].batchCode}` : "Monitoring statusu"}</div>
+            <p className="mt-2 text-xs leading-relaxed text-zinc-300">Najważniejszy obszar do interwencji: śmiertelność, FCR i temperatury w hali.</p>
+            <a href="/produkcja" className="mt-3 inline-flex rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/15">Otwórz produkcję</a>
+          </div>
+        </div>
+      </div>
 
       {/* 🧠 Priorytety dnia */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">

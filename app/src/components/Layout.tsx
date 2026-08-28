@@ -193,6 +193,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
+      <div className="px-3 pt-3">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-2">
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-zinc-500">Tryb produktu</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setProductMode("demo")}
+              className={`rounded-lg px-3 py-2 text-center text-xs font-bold ${mode === "demo" ? "bg-emerald-600 text-white shadow-[0_6px_18px_rgba(16,185,129,0.25)]" : "bg-zinc-800 text-zinc-300"}`}
+            >
+              DEMO
+            </button>
+            <button
+              onClick={() => setProductMode("production")}
+              className={`rounded-lg px-3 py-2 text-center text-xs font-bold ${mode === "production" ? "bg-red-600 text-white shadow-[0_6px_18px_rgba(239,68,68,0.25)]" : "bg-zinc-800 text-zinc-300"}`}
+            >
+              PRODUCTION
+            </button>
+          </div>
+          <div className="mt-2 text-[10px] text-zinc-400">{productModeLabel(mode)}</div>
+        </div>
+      </div>
+
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {NAV.filter((n) => tierDef().routes.some((r) => (r === "/" ? n.to === "/" : n.to.startsWith(r)))).map((n) => {
           const active = n.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(n.to) || (n.to.startsWith("/erp") && loc.pathname.startsWith("/erp"));
@@ -241,6 +262,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="ml-auto flex items-center gap-2">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-red-300">
             {productModeLabel(mode)}
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500">Mode</span>
+            <button
+              onClick={() => setProductMode("demo")}
+              className={`rounded-md px-2 py-1 text-[10px] font-bold ${mode === "demo" ? "bg-emerald-600 text-white" : "text-zinc-400 hover:bg-zinc-800"}`}
+            >
+              DEMO
+            </button>
+            <button
+              onClick={() => setProductMode("production")}
+              className={`rounded-md px-2 py-1 text-[10px] font-bold ${mode === "production" ? "bg-red-600 text-white" : "text-zinc-400 hover:bg-zinc-800"}`}
+            >
+              PROD
+            </button>
           </div>
           <button
             onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}

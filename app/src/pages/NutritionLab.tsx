@@ -9,11 +9,13 @@ import FeedIntelligence from "@/components/FeedIntelligence";
 const num = (v: unknown) => Number(v ?? 0);
 
 type Sex = "toms" | "hens";
+type GeneticLine = "BUT Big 6" | "BUT 6" | "Nicholas" | "Hybrid Converter" | "Hybrid Grade Maker";
 type AgeGroup =
   | "chick0_3" | "chick4_7" | "chick8_14"
   | "starter15_21" | "starter22_28"
   | "grower29_56" | "finisher57_84" | "finisher85_110" | "finisher113_140"
   | "prestarter" | "starter" | "grower1" | "grower2" | "finisher1" | "finisher2";
+const GENETIC_OPTIONS: GeneticLine[] = ["BUT Big 6", "BUT 6", "Nicholas", "Hybrid Converter", "Hybrid Grade Maker"];
 const GROUPS_BY_SEX: Record<Sex, { key: AgeGroup; label: string }[]> = {
   toms: [
     { key: "chick0_3", label: "Pisklę 0–3 d" },
@@ -40,6 +42,7 @@ const GROUPS_BY_SEX: Record<Sex, { key: AgeGroup; label: string }[]> = {
 export default function NutritionLab() {
   const ings = trpc.nutrition.ingredients.useQuery();
   const [sex, setSex] = useState<Sex>("toms");
+  const [genetics, setGenetics] = useState<GeneticLine>("BUT Big 6");
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("finisher113_140");
   const [shares, setShares] = useState<Record<number, number>>({});
   const [showWhy, setShowWhy] = useState(false);
@@ -58,11 +61,11 @@ export default function NutritionLab() {
   }, [sex]);
 
   const sim = trpc.nutrition.simulate.useQuery(
-    { items: items.length ? items : [{ ingredientId: 1, percent: 100 }], ageGroup, sex },
+    { items: items.length ? items : [{ ingredientId: 1, percent: 100 }], ageGroup, sex, genetics },
     { enabled: !!ings.data },
   );
   const batchSim = trpc.nutrition.batchSimulation.useQuery(
-    { items: items.length ? items : [{ ingredientId: 1, percent: 100 }], ageGroup, birds, days, sex },
+    { items: items.length ? items : [{ ingredientId: 1, percent: 100 }], ageGroup, birds, days, sex, genetics },
     { enabled: !!ings.data && items.length > 0 },
   );
 
@@ -108,6 +111,14 @@ export default function NutritionLab() {
             </button>
           ))}
         </div>
+        <label className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
+          Linia genetyczna
+          <select value={genetics} onChange={(e) => setGenetics(e.target.value as GeneticLine)} className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100">
+            {GENETIC_OPTIONS.map((line) => (
+              <option key={line} value={line}>{line}</option>
+            ))}
+          </select>
+        </label>
         {GROUPS.map((g) => (
           <button key={g.key} onClick={() => setAgeGroup(g.key)}
             className={`rounded-lg border px-3 py-2 text-xs font-medium ${ageGroup === g.key ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" : "border-zinc-800 text-zinc-400 hover:text-zinc-200"}`}>

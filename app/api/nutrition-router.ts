@@ -109,6 +109,7 @@ const mixInput = z.object({
     "grower", "finisher",
   ]).default("finisher113_140"),
   sex: z.enum(["toms", "hens", "mixed"]).default("toms"),
+  genetics: z.enum(["BUT Big 6", "BUT 6", "Nicholas", "Hybrid Converter", "Hybrid Grade Maker"]).default("BUT Big 6"),
 });
 
 const REQUIREMENTS: Record<string, Record<string, number>> = {
@@ -129,18 +130,70 @@ const REQUIREMENTS: Record<string, Record<string, number>> = {
   finisher2: { energy: 3250, protein: 16.5, lysine: 0.9, methionine: 0.38, threonine: 0.68, calcium: 0.85, phosphorus: 0.5, sodium: 0.14, fiber: 5.0, fat: 8.5 },
 };
 
+const GENETIC_REQUIREMENTS: Record<string, Record<string, Record<string, number>>> = {
+  "BUT Big 6": {
+    toms: { energy: 2900, protein: 24.5, lysine: 1.55, methionine: 0.62, threonine: 1.08, calcium: 1.10, phosphorus: 0.65, sodium: 0.17, fiber: 3.8, fat: 6.4 },
+    hens: { energy: 2860, protein: 23.8, lysine: 1.50, methionine: 0.60, threonine: 1.03, calcium: 1.08, phosphorus: 0.64, sodium: 0.17, fiber: 3.9, fat: 6.3 },
+    mixed: { energy: 2880, protein: 24.1, lysine: 1.53, methionine: 0.61, threonine: 1.05, calcium: 1.09, phosphorus: 0.65, sodium: 0.17, fiber: 3.9, fat: 6.3 },
+  },
+  "BUT 6": {
+    toms: { energy: 2925, protein: 24.8, lysine: 1.58, methionine: 0.63, threonine: 1.10, calcium: 1.12, phosphorus: 0.66, sodium: 0.17, fiber: 3.7, fat: 6.5 },
+    hens: { energy: 2885, protein: 24.2, lysine: 1.52, methionine: 0.61, threonine: 1.06, calcium: 1.10, phosphorus: 0.65, sodium: 0.17, fiber: 3.8, fat: 6.3 },
+    mixed: { energy: 2905, protein: 24.5, lysine: 1.55, methionine: 0.62, threonine: 1.08, calcium: 1.11, phosphorus: 0.65, sodium: 0.17, fiber: 3.8, fat: 6.4 },
+  },
+  Nicholas: {
+    toms: { energy: 2970, protein: 25.2, lysine: 1.63, methionine: 0.64, threonine: 1.12, calcium: 1.13, phosphorus: 0.67, sodium: 0.17, fiber: 3.6, fat: 6.6 },
+    hens: { energy: 2915, protein: 24.6, lysine: 1.57, methionine: 0.62, threonine: 1.08, calcium: 1.10, phosphorus: 0.66, sodium: 0.17, fiber: 3.7, fat: 6.4 },
+    mixed: { energy: 2940, protein: 24.9, lysine: 1.60, methionine: 0.63, threonine: 1.10, calcium: 1.11, phosphorus: 0.66, sodium: 0.17, fiber: 3.7, fat: 6.5 },
+  },
+  "Hybrid Converter": {
+    toms: { energy: 3010, protein: 25.8, lysine: 1.67, methionine: 0.66, threonine: 1.16, calcium: 1.15, phosphorus: 0.68, sodium: 0.17, fiber: 3.5, fat: 6.8 },
+    hens: { energy: 2950, protein: 25.0, lysine: 1.60, methionine: 0.63, threonine: 1.10, calcium: 1.12, phosphorus: 0.67, sodium: 0.17, fiber: 3.6, fat: 6.6 },
+    mixed: { energy: 2980, protein: 25.4, lysine: 1.64, methionine: 0.65, threonine: 1.13, calcium: 1.14, phosphorus: 0.67, sodium: 0.17, fiber: 3.6, fat: 6.7 },
+  },
+  "Hybrid Grade Maker": {
+    toms: { energy: 3040, protein: 26.2, lysine: 1.72, methionine: 0.68, threonine: 1.19, calcium: 1.16, phosphorus: 0.69, sodium: 0.18, fiber: 3.4, fat: 7.0 },
+    hens: { energy: 2980, protein: 25.5, lysine: 1.65, methionine: 0.65, threonine: 1.14, calcium: 1.13, phosphorus: 0.68, sodium: 0.17, fiber: 3.5, fat: 6.8 },
+    mixed: { energy: 3010, protein: 25.9, lysine: 1.68, methionine: 0.66, threonine: 1.17, calcium: 1.15, phosphorus: 0.68, sodium: 0.18, fiber: 3.5, fat: 6.9 },
+  },
+};
+
+const GENETIC_LINE_OPTIONS = ["BUT Big 6", "BUT 6", "Nicholas", "Hybrid Converter", "Hybrid Grade Maker"] as const;
+type GeneticLineName = typeof GENETIC_LINE_OPTIONS[number];
+
+function getGeneticRequirements(genetics: string | undefined, sex: "toms" | "hens" | "mixed", ageGroup: string) {
+  const line = genetics && GENETIC_LINE_OPTIONS.includes(genetics as GeneticLineName) ? genetics as GeneticLineName : "BUT Big 6";
+  const base = GENETIC_REQUIREMENTS[line]?.[sex] ?? GENETIC_REQUIREMENTS["BUT Big 6"].mixed;
+  const phaseFallback = REQUIREMENTS[resolveAgeGroup(ageGroup, sex) as keyof typeof REQUIREMENTS] ?? REQUIREMENTS.finisher113_140;
+  const blend = (phase: number, genetic: number) => phase + (genetic - phase) * 0.04;
+
+  return {
+    energy: blend(phaseFallback.energy, base.energy ?? phaseFallback.energy),
+    protein: blend(phaseFallback.protein, base.protein ?? phaseFallback.protein),
+    lysine: blend(phaseFallback.lysine, base.lysine ?? phaseFallback.lysine),
+    methionine: blend(phaseFallback.methionine, base.methionine ?? phaseFallback.methionine),
+    threonine: blend(phaseFallback.threonine, base.threonine ?? phaseFallback.threonine),
+    calcium: blend(phaseFallback.calcium, base.calcium ?? phaseFallback.calcium),
+    phosphorus: blend(phaseFallback.phosphorus, base.phosphorus ?? phaseFallback.phosphorus),
+    sodium: blend(phaseFallback.sodium, base.sodium ?? phaseFallback.sodium),
+    fiber: blend(phaseFallback.fiber, base.fiber ?? phaseFallback.fiber),
+    fat: blend(phaseFallback.fat, base.fat ?? phaseFallback.fat),
+    line,
+  };
+}
+
 export function statusFromDelta(delta: number, required: number): "PASS" | "WARNING" | "DEFICIT" | "EXCESS" {
   if (required <= 0) return "PASS";
   const ratio = delta / required;
   if (Math.abs(ratio) <= 0.03) return "PASS";
-  if (ratio < -0.12) return "DEFICIT";
+  if (ratio < -0.15) return "DEFICIT";
   if (ratio < 0) return "WARNING";
-  if (ratio > 0.12) return "EXCESS";
+  if (ratio > 0.15) return "EXCESS";
   return "WARNING";
 }
 
-export function buildBalanceReport(profile: ReturnType<typeof profileOf>, ageGroup: string, sex: "toms" | "hens" | "mixed" = "mixed") {
-  const target = REQUIREMENTS[resolveAgeGroup(ageGroup, sex) as keyof typeof REQUIREMENTS] ?? REQUIREMENTS.finisher113_140;
+export function buildBalanceReport(profile: ReturnType<typeof profileOf>, ageGroup: string, sex: "toms" | "hens" | "mixed" = "mixed", genetics?: string) {
+  const target = getGeneticRequirements(genetics, sex, ageGroup);
   const rows = [
     { key: "energy", label: "Energia", value: profile.energy, required: target.energy, unit: "kcal" },
     { key: "protein", label: "Białko", value: profile.protein, required: target.protein, unit: "%" },
@@ -208,15 +261,17 @@ export const nutritionRouter = createRouter({
     const p = profileOf(items);
     const prod = productionFromProfile(p, input.ageGroup, input.sex);
     const total = items.reduce((a, i) => a + i.percent, 0);
-    const balance = buildBalanceReport(p, input.ageGroup, input.sex);
+    const requirements = getGeneticRequirements(input.genetics, input.sex, input.ageGroup);
+    const balance = buildBalanceReport(p, input.ageGroup, input.sex, input.genetics);
     return {
       profile: p,
       production: prod,
+      requirements,
       balance: balance.rows,
       totalPercent: total,
       normalized: Math.abs(total - 100) < 0.5,
       costPerKgLive: (p.costPerTon / 1000) * prod.fcr,
-      explanation: explainMix(items, p, prod, input.ageGroup),
+      explanation: explainMix(items, p, prod, `${input.genetics} · ${input.ageGroup}`),
       warnings: [
         ...(total > 100.5 ? [`Suma udziałów ${total.toFixed(0)}% — przekracza 100%, wartości znormalizowane`] : []),
         ...(total < 99.5 && total > 0 ? [`Suma udziałów ${total.toFixed(0)}% — uzupełnij do 100%`] : []),
@@ -256,6 +311,7 @@ export const nutritionRouter = createRouter({
       items: mixInput.shape.items,
       ageGroup: mixInput.shape.ageGroup,
       sex: mixInput.shape.sex,
+      genetics: mixInput.shape.genetics,
       birds: z.number().default(10000),
       days: z.number().default(140),
     }))
@@ -263,7 +319,7 @@ export const nutritionRouter = createRouter({
       const db = getDb();
       const items = await loadIngredients(db, input.items, requireTenantCompany(ctx.user!));
       const p = profileOf(items);
-      const prod = productionFromProfile(p, input.ageGroup);
+      const prod = productionFromProfile(p, input.ageGroup, input.sex);
       const finalWeightKg = (prod.adgG * input.days) / 1000;
       const livability = 96 - prod.metabolicRisk * 0.05;
       const soldKg = input.birds * (livability / 100) * finalWeightKg;
@@ -330,6 +386,7 @@ export const nutritionRouter = createRouter({
     const prod = productionFromProfile(p, input.ageGroup, input.sex);
     const gk = resolveAgeGroup(input.ageGroup, input.sex) as AgeGroupKey;
     const g = AGE_GROUPS[gk] ?? AGE_GROUPS.finisher1;
+    const geneticsTargets = getGeneticRequirements(input.genetics, input.sex, input.ageGroup);
     const total = items.reduce((a, i) => a + i.percent, 0);
 
     const ings = await db.select().from(s.feedIngredients).where(eq(s.feedIngredients.companyId, companyId));
@@ -343,21 +400,26 @@ export const nutritionRouter = createRouter({
 
     // cele fazy
     const dP = p.protein - g.protein, dE = p.energy - g.energy, dL = p.lysine - g.lysine;
+    const targetProtein = geneticsTargets.protein || g.protein;
+    const targetEnergy = geneticsTargets.energy || g.energy;
+    const targetLysine = geneticsTargets.lysine || g.lysine;
+    const targetFiber = geneticsTargets.fiber || 4.5;
+
     if (dP < -1) {
       const best = ings.filter((i) => num(i.proteinPct) >= 40 && !inMix.has(i.id)).sort((a, b) => num(a.pricePerTon) - num(b.pricePerTon))[0];
-      tips.push({ type: "error", text: `Białko ${p.protein.toFixed(1)}% poniżej celu fazy (${g.protein}%). ${best ? `Najtańsza korekta: +${Math.min(10, Math.ceil(-dP / num(best.proteinPct) * 100))}% ${best.name}.` : "Zwiększ udział surowca białkowego."}` });
-    } else if (dP > 2.5) tips.push({ type: "warn", text: `Białko ${p.protein.toFixed(1)}% powyżej potrzeb fazy (${g.protein}%) — nadmiar przepala budżet i obciąża metabolizm; możesz odjąć surowca białkowego.` });
-    else tips.push({ type: "ok", text: `Białko ${p.protein.toFixed(1)}% w celu fazy (${g.protein}%).` });
+      tips.push({ type: "error", text: `${input.genetics}: białko ${p.protein.toFixed(1)}% poniżej celu dla fazy (${targetProtein}%). ${best ? `Najtańsza korekta: +${Math.min(10, Math.ceil(-dP / num(best.proteinPct) * 100))}% ${best.name}.` : "Zwiększ udział surowca białkowego."}` });
+    } else if (dP > 2.5) tips.push({ type: "warn", text: `${input.genetics}: białko ${p.protein.toFixed(1)}% powyżej potrzeb fazy (${targetProtein}%) — nadmiar przepala budżet i obciąża metabolizm; możesz odjąć surowca białkowego.` });
+    else tips.push({ type: "ok", text: `${input.genetics}: białko ${p.protein.toFixed(1)}% w celu fazy (${targetProtein}%).` });
 
-    if (dE < -100) tips.push({ type: "warn", text: `Energia ${p.energy.toFixed(0)} kcal poniżej celu (${g.energy}) — dodaj tłuszcz/olej (+1 p.p. tłuszczu ≈ +85 kcal) lub kukurydzę.` });
-    else tips.push({ type: "ok", text: `Energia ${p.energy.toFixed(0)} kcal OK (cel ${g.energy}).` });
+    if (dE < -100) tips.push({ type: "warn", text: `${input.genetics}: energia ${p.energy.toFixed(0)} kcal poniżej celu (${targetEnergy}) — dodaj tłuszcz/olej (+1 p.p. tłuszczu ≈ +85 kcal) lub kukurydzę.` });
+    else tips.push({ type: "ok", text: `${input.genetics}: energia ${p.energy.toFixed(0)} kcal OK (cel ${targetEnergy}).` });
 
     if (dL < -0.08) {
       const lys = ings.find((i) => num(i.lysinePct) > 10);
-      tips.push({ type: "error", text: `Lizyna ${p.lysine.toFixed(2)}% poniżej celu (${g.lysine}%). ${lys ? `Dodaj ~${((-dL) / num(lys.lysinePct) * 100).toFixed(2)}% ${lys.name}.` : "Zwiększ udział śruty sojowej."}` });
-    } else tips.push({ type: "ok", text: `Lizyna ${p.lysine.toFixed(2)}% OK (cel ${g.lysine}%).` });
+      tips.push({ type: "error", text: `${input.genetics}: lizyna ${p.lysine.toFixed(2)}% poniżej celu (${targetLysine}%). ${lys ? `Dodaj ~${((-dL) / num(lys.lysinePct) * 100).toFixed(2)}% ${lys.name}.` : "Zwiększ udział śruty sojowej."}` });
+    } else tips.push({ type: "ok", text: `${input.genetics}: lizyna ${p.lysine.toFixed(2)}% OK (cel ${targetLysine}%).` });
 
-    if (p.fiber > 5.5) tips.push({ type: "warn", text: `Włókno ${p.fiber.toFixed(1)}% — powyżej 5.5% rośnie wilgotność ściółki; rozważ ksylanazę lub ogranicz otręby/DDGS.` });
+    if (p.fiber > targetFiber + 0.8) tips.push({ type: "warn", text: `${input.genetics}: włókno ${p.fiber.toFixed(1)}% przekracza benchmark (${targetFiber.toFixed(1)}%); rozważ ksylanazę lub ogranicz otręby/DDGS.` });
     if (p.moisture > 14.5) tips.push({ type: "warn", text: `Wilgotność mieszanki ${p.moisture.toFixed(1)}% — powyżej 14.5% rośnie ryzyko pleśni i mikotoksyn w silosie; skróć czas składowania.` });
     if (p.threonine > 0 && p.threonine < g.lysine * 0.45) tips.push({ type: "idea", text: `Treonina ${p.threonine.toFixed(2)}% — poniżej ~45% poziomu lizyny; drugi ograniczający aminokwas dla indyków, rozważ L-treoninę.` });
     if (p.sodium > 0.25) tips.push({ type: "warn", text: `Sód ${p.sodium.toFixed(2)}% — powyżej 0.25% rośnie pobór wody i mokra ściółka.` });
