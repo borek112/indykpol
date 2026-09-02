@@ -71,8 +71,19 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
 
 if (env.demoMode) {
   app.get("/api/demo-login", async (c) => {
-    if (!env.demoCompanyId) return c.json({ error: "DEMO_NOT_CONFIGURED" }, 503);
-    const user = await establishDemoSession(c, env.demoCompanyId, "public-demo", "Public Demo");
+    const { getDb } = await import("./queries/connection");
+    const { companies } = await import("@db/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = getDb();
+    const [company] = env.demoCompanyId
+      ? await db.select().from(companies).where(eq(companies.id, env.demoCompanyId)).limit(1)
+      : await db.select().from(companies).limit(1);
+    const companyId = company?.id ?? (await db.insert(companies).values({
+      name: "Public Demo",
+      countryCode: "PL",
+      baseCurrency: "EUR",
+    }).$returningId())[0].id;
+    const user = await establishDemoSession(c, companyId, "public-demo", "Public Demo");
     if (!user) return c.json({ error: "DEMO_COMPANY_NOT_FOUND" }, 503);
     return c.redirect(env.frontendUrl || "/", 302);
   });
@@ -88,6 +99,7 @@ if (!env.isProduction) {
   app.get("/api/dev-login", async (c) => {
     const { getDb } = await import("./queries/connection");
     const { companies } = await import("@db/schema");
+    const { eq } = await import("drizzle-orm");
     const db = getDb();
     const [company] = env.demoCompanyId
       ? await db.select().from(companies).where(eq(companies.id, env.demoCompanyId)).limit(1)

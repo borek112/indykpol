@@ -151,12 +151,12 @@ export const orgRouter = createRouter({
         baseCurrency: input.baseCurrency.trim().toUpperCase(),
       }).$returningId();
 
-      await db.update(s.users).set({ companyId, role: "admin" }).where(eq(s.users.id, ctx.user!.id));
-      await audit("companies", companyId, "create", { newValues: input });
-
       if (input.seedStarterData) {
         await seedStarterCompanyData(companyId);
       }
+
+      await db.update(s.users).set({ companyId }).where(eq(s.users.id, ctx.user!.id));
+      await audit("companies", companyId, "create", { newValues: input });
 
       return { id: companyId };
     }),
