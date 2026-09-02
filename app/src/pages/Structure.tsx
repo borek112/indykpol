@@ -15,6 +15,7 @@ const inputCls =
   "w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-red-500";
 
 type FormState =
+  | { kind: "company" }
   | { kind: "farm"; companyId: number }
   | { kind: "house"; farmId: number }
   | { kind: "batch"; houseId: number }
@@ -36,6 +37,12 @@ export default function Structure() {
   const archiveHouse = trpc.org.archiveHouse.useMutation({ onSuccess: inv });
   const createBatch = trpc.org.createBatch.useMutation({ onSuccess: inv });
   const createLine = trpc.org.createGeneticLine.useMutation({ onSuccess: inv });
+  const createCompany = trpc.org.createCompany.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([utils.org.structure.invalidate(), utils.org.companies.invalidate()]);
+      setCompanyId(result.id);
+    },
+  });
 
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -46,6 +53,7 @@ export default function Structure() {
   const company = (structure.data?.companies ?? []).find((c) => c.id === activeCompanyId);
 
   const [farmForm, setFarmForm] = useState({ name: "", countryCode: "PL", city: "", lat: 52, lng: 19, capacity: 50000 });
+  const [companyForm, setCompanyForm] = useState({ name: "", countryCode: "PL", baseCurrency: "EUR", seedStarterData: true });
   const [houseForm, setHouseForm] = useState({ name: "", houseType: "finisher" as "brooder" | "finisher", areaM2: 1800, sectorCount: 0, lengthM: 0, widthM: 0, heightM: 0, feederCount: 0, drinkerCount: 0, lightingLux: 0, lightingHours: 0, ventilationM3h: 0 });
   const [batchForm, setBatchForm] = useState({
     code: "", geneticLine: "BUT Big 6", sex: "toms" as "toms" | "hens" | "mixed",
@@ -71,6 +79,12 @@ export default function Structure() {
             ))}
           </select>
           <button
+            onClick={() => setForm({ kind: "company" })}
+            className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500"
+          >
+            <Plus className="h-4 w-4" /> Firma
+          </button>
+          <button
             onClick={() => setForm({ kind: "farm", companyId: activeCompanyId })}
             className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500"
           >
@@ -78,6 +92,39 @@ export default function Structure() {
           </button>
         </div>
       </div>
+
+      {form?.kind === "company" && (
+        <div className="rounded-xl border border-emerald-900/50 bg-zinc-900 p-5">
+          <h3 className="mb-4 font-semibold">Dodaj własną firmę</h3>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+            <Field label="Nazwa firmy"><input className={inputCls} value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} /></Field>
+            <Field label="Kraj">
+              <select className={inputCls} value={companyForm.countryCode} onChange={(e) => setCompanyForm({ ...companyForm, countryCode: e.target.value })}>
+                {Object.entries(COUNTRIES).map(([c, m]) => <option key={c} value={c}>{m.flag} {m.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Waluta bazowa">
+              <input className={inputCls} value={companyForm.baseCurrency} onChange={(e) => setCompanyForm({ ...companyForm, baseCurrency: e.target.value.toUpperCase() })} maxLength={3} />
+            </Field>
+            <label className="col-span-2 flex items-center gap-2 self-end text-xs text-zinc-400 lg:col-span-3">
+              <input type="checkbox" checked={companyForm.seedStarterData} onChange={(e) => setCompanyForm({ ...companyForm, seedStarterData: e.target.checked })} />
+              Utwórz dane startowe (ferma, kurnik, rzut)
+            </label>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              disabled={createCompany.isPending}
+              onClick={() => {
+                createCompany.mutate(companyForm);
+                setForm(null);
+                setCompanyForm({ name: "", countryCode: "PL", baseCurrency: "EUR", seedStarterData: true });
+              }}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+            >Utwórz firmę</button>
+            <button onClick={() => setForm(null)} className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">Anuluj</button>
+          </div>
+        </div>
+      )}
 
       {form?.kind === "farm" && (
         <div className="rounded-xl border border-red-900/50 bg-zinc-900 p-5">

@@ -45,6 +45,90 @@ export async function generateSchedule(batchId: number, startDate: string, sex: 
   }
 }
 
+async function seedStarterCompanyData(companyId: number) {
+  const db = getDb();
+  const start = new Date();
+  start.setDate(start.getDate() - 21);
+  const startDate = start.toISOString().slice(0, 10);
+  const endDate = new Date(start);
+  endDate.setDate(endDate.getDate() + 126);
+
+  const [{ id: lineId }] = await db.insert(s.geneticLines).values({
+    companyId,
+    name: "Starter Line",
+    supplier: "Starter Hatchery",
+  }).$returningId();
+
+  const [{ id: farmId }] = await db.insert(s.farms).values({
+    companyId,
+    name: "Moja Ferma 1",
+    countryCode: "PL",
+    city: "Start",
+    lat: "52.00000",
+    lng: "19.00000",
+    capacity: 25000,
+  }).$returningId();
+
+  const [{ id: houseId }] = await db.insert(s.houses).values({
+    farmId,
+    name: "Kurnik A",
+    houseType: "finisher",
+    areaM2: "1600.0",
+    maxDensityKgM2: "42.0",
+    lengthM: "80.0",
+    widthM: "20.0",
+    heightM: "4.0",
+    feederCount: 120,
+    drinkerCount: 120,
+    lightingLux: 25,
+    lightingHours: "16.0",
+    ventilationM3h: 80000,
+  }).$returningId();
+
+  const [{ id: batchId }] = await db.insert(s.batches).values({
+    houseId,
+    geneticLineId: lineId,
+    code: `START-${companyId}-${Date.now()}`,
+    geneticLine: "Starter Line",
+    sex: "mixed",
+    startDate,
+    plannedEndDate: endDate.toISOString().slice(0, 10),
+    initialCount: 12000,
+    currentCount: 11880,
+    chickSupplier: "Starter Hatchery",
+    chickPrice: "1.650",
+  }).$returningId();
+
+  await db.insert(s.weighings).values({
+    batchId,
+    weighedAt: new Date(),
+    dayAge: 21,
+    sampleSize: 80,
+    avgWeightG: 930,
+    medianG: 920,
+    stdDevG: 110,
+    minG: 650,
+    maxG: 1190,
+    cv: "11.83",
+    operator: "system",
+  });
+
+  await db.insert(s.feedUsages).values({
+    batchId,
+    day: new Date().toISOString().slice(0, 10),
+    kg: "8420.0",
+  });
+
+  await db.insert(s.mortalities).values({
+    batchId,
+    day: new Date().toISOString().slice(0, 10),
+    count: 8,
+    cause: "start baseline",
+  });
+
+  await generateSchedule(batchId, startDate, "mixed");
+}
+
 export const orgRouter = createRouter({
   /* ------- firmy / tryb ------- */
   companies: authedQuery.query(async ({ ctx }) => {
@@ -53,9 +137,28 @@ export const orgRouter = createRouter({
   }),
 
   createCompany: authedQuery
-    .input(z.object({ name: z.string().min(2), countryCode: z.string().length(2), baseCurrency: z.string().length(3).default("EUR") }))
-    .mutation(async () => {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Firma jest przypisywana podczas rejestracji konta. Tworzenie dodatkowych tenantów nie jest dostępne w tym widoku." });
+    .input(z.object({
+      name: z.string().min(2),
+      countryCode: z.string().length(2),
+      baseCurrency: z.string().length(3).default("EUR"),
+      seedStarterData: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const [{ id: companyId }] = await db.insert(s.companies).values({
+        name: input.name.trim(),
+        countryCode: input.countryCode.trim().toUpperCase(),
+        baseCurrency: input.baseCurrency.trim().toUpperCase(),
+      }).$returningId();
+
+      await db.update(s.users).set({ companyId, role: "admin" }).where(eq(s.users.id, ctx.user!.id));
+      await audit("companies", companyId, "create", { newValues: input });
+
+      if (input.seedStarterData) {
+        await seedStarterCompanyData(companyId);
+      }
+
+      return { id: companyId };
     }),
 
   /* ------- linie genetyczne ------- */
