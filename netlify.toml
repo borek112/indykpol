@@ -6,9 +6,19 @@
   command = "npm install --legacy-peer-deps && npx vite build"
   publish = "dist/public"
 
+[functions]
+  directory = "app/netlify/functions"
+  node_bundler = "esbuild"
+
 [[redirects]]
   from = "/api/*"
-  to = "https://indykpol-production.up.railway.app/api/:splat"
+  to = "/.netlify/functions/trpc/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/trpc/health"
   status = 200
   force = true
 

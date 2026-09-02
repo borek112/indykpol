@@ -4,12 +4,51 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { eq } from "drizzle-orm";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
+import { shouldStartNodeServer } from "./lib/runtime";
 import { registerAuthRoutes } from "./auth/routes";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
+let demoSeedPromise: Promise<void> | null = null;
+
+async function ensureDemoSeedData() {
+  if (!env.demoSeedOnBoot) return;
+  if (!demoSeedPromise) {
+    demoSeedPromise = (async () => {
+      const { seedDatabase } = await import("../db/seed");
+      await seedDatabase();
+    })();
+  }
+  await demoSeedPromise;
+}
+
+async function resolveDemoCompanyId() {
+  const { getDb } = await import("./queries/connection");
+  const { companies } = await import("@db/schema");
+  const db = getDb();
+
+  if (env.demoCompanyId) {
+    const [configured] = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(eq(companies.id, env.demoCompanyId))
+      .limit(1);
+    if (configured) return configured.id;
+  }
+
+  const [demo] = await db
+    .select({ id: companies.id })
+    .from(companies)
+    .where(eq(companies.name, "demo-company-1"))
+    .limit(1);
+  if (demo) return demo.id;
+
+  const [first] = await db.select({ id: companies.id }).from(companies).limit(1);
+  return first?.id ?? null;
+}
 
 app.use(
   "/api/*",
@@ -48,7 +87,6 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
   const { findUserByUnionId } = await import("./queries/users");
   const { getDb } = await import("./queries/connection");
   const { companies, users } = await import("@db/schema");
-  const { eq } = await import("drizzle-orm");
   const db = getDb();
   const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
   if (!company) return null;
@@ -71,8 +109,10 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
 
 if (env.demoMode) {
   app.get("/api/demo-login", async (c) => {
-    if (!env.demoCompanyId) return c.json({ error: "DEMO_NOT_CONFIGURED" }, 503);
-    const user = await establishDemoSession(c, env.demoCompanyId, "public-demo", "Public Demo");
+    await ensureDemoSeedData();
+    const companyId = await resolveDemoCompanyId();
+    if (!companyId) return c.json({ error: "DEMO_NOT_CONFIGURED" }, 503);
+    const user = await establishDemoSession(c, companyId, "public-demo", "Public Demo");
     if (!user) return c.json({ error: "DEMO_COMPANY_NOT_FOUND" }, 503);
     return c.redirect(env.frontendUrl || "/", 302);
   });
@@ -86,6 +126,7 @@ if (env.demoMode) {
 /* DEV-ONLY: lokalne logowanie dla istniejącego użytkownika. */
 if (!env.isProduction) {
   app.get("/api/dev-login", async (c) => {
+    await ensureDemoSeedData();
     const { getDb } = await import("./queries/connection");
     const { companies } = await import("@db/schema");
     const db = getDb();
@@ -202,7 +243,7 @@ app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;
 
-if (env.isProduction) {
+if (shouldStartNodeServer()) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
   serveStaticFiles(app);

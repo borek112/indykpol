@@ -52,16 +52,24 @@ Use the app folder as the site root.
 - Build command: `npm install --legacy-peer-deps && npx vite build`
 - Publish directory: `dist/public`
 
-### Required environment variable
+### Environment variables (Netlify)
 
 ```bash
-VITE_API_URL=https://your-backend.example.com
+NODE_ENV=production
+FRONTEND_URL=https://your-site.netlify.app
+DEMO_MODE=true
+DEMO_SEED_ON_BOOT=true
+TURSO_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-token
+JWT_SECRET=your-long-secret
 ```
 
+`VITE_API_URL` is optional and should stay empty when API runs as Netlify Functions.
+
 Important:
-- the frontend is static and should be hosted on Netlify
-- MySQL / database / backend should not be exposed publicly
-- keep database and API on a separate secure backend service (for example Railway, Render, Azure App Service, or a custom private runtime)
+- frontend + API run on Netlify (API through `/.netlify/functions/trpc`)
+- database should be Turso (serverless SQLite) for Netlify production
+- do not expose secrets in frontend variables
 
 ## Important notes
 
