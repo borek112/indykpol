@@ -622,7 +622,7 @@ export async function logEvent(input: ProductionEventCreate) {
     batchId: input.batchId, eventType: input.eventType,
     dayNumber: input.dayNumber, description: input.description,
     metadata: input.metadata ?? null,
-  }).$returningId();
+  }).returning({ id: s.productionAnalyses.id });
   return { id };
 }
 
@@ -711,7 +711,7 @@ export async function splitBatch(input: SplitBatchInput, author: string) {
         currentCount: sp.count,
         status: "active",
         updatedBy: author,
-      }).$returningId();
+      }).returning({ id: s.batches.id });
       created.push(id);
       await tx.insert(s.productionEvents).values({
         batchId: id, eventType: "transfer",
@@ -765,7 +765,7 @@ export async function mergeBatches(input: MergeBatchesInput, author: string) {
       currentCount: totalCount,
       status: "active",
       updatedBy: author,
-    }).$returningId();
+    }).returning({ id: s.productionEvents.id });
     mergedId = id;
     await tx.update(s.batches)
       .set({ status: "closed", updatedBy: author }) // ADAPT: FOUNDATION TRANSFERRED → KIMI closed

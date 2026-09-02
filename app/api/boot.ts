@@ -8,6 +8,7 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { registerAuthRoutes } from "./auth/routes";
+import { eq } from "drizzle-orm";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -48,7 +49,6 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
   const { findUserByUnionId } = await import("./queries/users");
   const { getDb } = await import("./queries/connection");
   const { companies, users } = await import("@db/schema");
-  const { eq } = await import("drizzle-orm");
   const db = getDb();
   const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
   if (!company) return null;
@@ -59,7 +59,7 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
       name,
       role: "user",
       companyId,
-    }).$returningId();
+    }).returning({ id: users.id });
     [user] = await db.select().from(users).where(eq(users.id, id));
   } else if (user.companyId !== companyId) {
     await db.update(users).set({ companyId, name }).where(eq(users.id, user.id));
@@ -95,7 +95,7 @@ if (!env.isProduction) {
     const companyId = company?.id ?? (await db.insert(companies).values({
         name: "Bloody Turkey Demo",
         countryCode: "PL",
-    }).$returningId())[0].id;
+    }).returning({ id: companies.id }))[0].id;
     await establishDemoSession(c, companyId, env.ownerUnionId || "dev-owner", "Local Demo");
     return c.redirect("/");
   });
@@ -152,7 +152,7 @@ app.post("/api/v1/ingest", async (c) => {
         ammoniaPpm: body.ammoniaPpm != null ? String(body.ammoniaPpm) : null,
         ventilationPct: body.ventilationPct != null ? Number(body.ventilationPct) : null,
         source: `api:${apiKey.keyPrefix}`,
-      }).$returningId();
+      }).returning({ id: s.climateLogs.id });
       return c.json({ ok: true, inserted: "climate", id });
     }
     case "feedUsage": {
@@ -161,7 +161,7 @@ app.post("/api/v1/ingest", async (c) => {
         batchId: Number(body.batchId),
         day: String(body.day ?? new Date().toISOString().slice(0, 10)),
         kg: String(body.kg),
-      }).$returningId();
+      }).returning({ id: s.feedUsages.id });
       return c.json({ ok: true, inserted: "feedUsage", id });
     }
     case "mortality": {
@@ -171,7 +171,7 @@ app.post("/api/v1/ingest", async (c) => {
         day: String(body.day ?? new Date().toISOString().slice(0, 10)),
         count: Number(body.count),
         cause: String(body.cause ?? "zgłoszenie API"),
-      }).$returningId();
+      }).returning({ id: s.mortalities.id });
       return c.json({ ok: true, inserted: "mortality", id });
     }
     case "weighing": {
@@ -183,7 +183,7 @@ app.post("/api/v1/ingest", async (c) => {
         sampleSize: Number(body.sampleSize ?? 1),
         avgWeightG: Number(body.avgWeightG),
         operator: `api:${apiKey.keyPrefix}`,
-      }).$returningId();
+      }).returning({ id: s.weighings.id });
       return c.json({ ok: true, inserted: "weighing", id });
     }
     default:

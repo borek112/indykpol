@@ -156,7 +156,7 @@ const productionRouter = createRouter({
         minG: input.minG ?? input.avgWeightG - 2 * sd,
         maxG: input.maxG ?? input.avgWeightG + 2 * sd,
         cv: cv.toFixed(2), operator: input.operator ?? "system",
-      }).$returningId();
+      }).returning({ id: s.weighings.id });
       // Event Engine: ważenie uruchamia Dynamic Select Engine
       await generateDynamicSelects(input.batchId, input.avgWeightG);
       return { id, cv };
@@ -173,7 +173,7 @@ const productionRouter = createRouter({
         batchId: input.batchId, name: input.name, criteria: input.criteria,
         origin: "manual", birdCount: input.birdCount, avgWeightG: input.avgWeightG,
         status: "ok",
-      }).$returningId();
+      }).returning({ id: s.selects.id });
       return { id };
     }),
 
@@ -326,7 +326,7 @@ const feedRouter = createRouter({
         strategy: input.strategy, costPerTon: best.cost.toFixed(2),
         proteinPct: best.protein.toFixed(2), energyKcal: Math.round(best.energy),
         lysinePct: best.lys.toFixed(3), explanation,
-      }).$returningId();
+      }).returning({ id: s.selects.id });
       for (const m of best.mix) {
         await db.insert(s.recipeItems).values({ recipeId: id, ingredientId: m.id, percent: m.pct.toFixed(2) });
       }
@@ -371,7 +371,7 @@ const healthRouter = createRouter({
         activeSubstance: input.activeSubstance, dose: input.dose,
         reason: input.reason, withdrawalDays: input.withdrawalDays,
         vet: input.vet, cost: (input.cost ?? 0).toFixed(2),
-      }).$returningId();
+      }).returning({ id: s.recipeItems.id });
       if (input.cost && input.cost > 0) {
         await db.insert(s.costs).values({
           batchId: input.batchId, category: "vet", amount: input.cost.toFixed(2),

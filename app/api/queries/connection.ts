@@ -1,4 +1,5 @@
-import { drizzle } from "drizzle-orm/mysql2";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import { env } from "../lib/env";
 import * as schema from "@db/schema";
 import * as relations from "@db/relations";
@@ -9,8 +10,11 @@ let instance: ReturnType<typeof drizzle<typeof fullSchema>>;
 
 export function getDb() {
   if (!instance) {
-    instance = drizzle(env.databaseUrl, {
-      mode: "planetscale",
+    const url = env.tursoDbUrl || env.databaseUrl || "file:local.db";
+    instance = drizzle(createClient({
+      url,
+      authToken: env.tursoAuthToken || undefined,
+    }), {
       schema: fullSchema,
     });
   }

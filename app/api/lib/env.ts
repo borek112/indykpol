@@ -29,7 +29,9 @@ function optional(name: string, fallback = ""): string {
 
 export const env = {
   isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: required("DATABASE_URL"),
+  databaseUrl: process.env.DATABASE_URL ?? "",
+  tursoDbUrl: process.env.TURSO_DB_URL ?? process.env.DATABASE_URL ?? "",
+  tursoAuthToken: process.env.TURSO_AUTH_TOKEN ?? "",
   sessionSecret: process.env.SESSION_SECRET || process.env.JWT_SECRET || (
     process.env.NODE_ENV === "production" ? required("SESSION_SECRET") : "bte-local-session-secret"
   ),

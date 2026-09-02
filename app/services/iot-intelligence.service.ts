@@ -70,14 +70,13 @@ export async function createDevice(input: DeviceCreate) {
     ...(connection ? { connection } : {}),
     source: (config as Record<string, unknown> | undefined)?.source ?? (connection ? "manual-setup" : "api"),
   };
-  const r = await db.insert(s.iotDevices).values({
+  const [{ id }] = await db.insert(s.iotDevices).values({
     ...rest,
     config: mergedConfig,
     ...(positionX != null ? { positionX: String(positionX) } : {}),
     ...(positionY != null ? { positionY: String(positionY) } : {}),
     mqttTopic: input.mqttTopic ?? connection?.topic ?? `bte/${input.farmId}/${input.code}`,
-  });
-  const id = Number(r[0].insertId);
+  }).returning({ id: s.iotDevices.id });
   const [row] = await db.select().from(s.iotDevices).where(eq(s.iotDevices.id, id)).limit(1);
   return row;
 }

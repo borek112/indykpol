@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { copyCompanyTemplates } from "./queries/companies";
 import * as s from "@db/schema";
 import { eq, and, ne, desc } from "drizzle-orm";
 import { audit } from "./audit";
@@ -57,7 +58,7 @@ async function seedStarterCompanyData(companyId: number) {
     companyId,
     name: "Starter Line",
     supplier: "Starter Hatchery",
-  }).$returningId();
+  }).returning({ id: s.scheduleEvents.id });
 
   const [{ id: farmId }] = await db.insert(s.farms).values({
     companyId,
@@ -67,7 +68,7 @@ async function seedStarterCompanyData(companyId: number) {
     lat: "52.00000",
     lng: "19.00000",
     capacity: 25000,
-  }).$returningId();
+  }).returning({ id: s.farms.id });
 
   const [{ id: houseId }] = await db.insert(s.houses).values({
     farmId,
@@ -83,7 +84,7 @@ async function seedStarterCompanyData(companyId: number) {
     lightingLux: 25,
     lightingHours: "16.0",
     ventilationM3h: 80000,
-  }).$returningId();
+  }).returning({ id: s.houses.id });
 
   const [{ id: batchId }] = await db.insert(s.batches).values({
     houseId,
@@ -97,7 +98,7 @@ async function seedStarterCompanyData(companyId: number) {
     currentCount: 11880,
     chickSupplier: "Starter Hatchery",
     chickPrice: "1.650",
-  }).$returningId();
+  }).returning({ id: s.batches.id });
 
   await db.insert(s.weighings).values({
     batchId,
@@ -149,10 +150,11 @@ export const orgRouter = createRouter({
         name: input.name.trim(),
         countryCode: input.countryCode.trim().toUpperCase(),
         baseCurrency: input.baseCurrency.trim().toUpperCase(),
-      }).$returningId();
+      }).returning({ id: s.weighings.id });
 
       await db.update(s.users).set({ companyId, role: "admin" }).where(eq(s.users.id, ctx.user!.id));
       await audit("companies", companyId, "create", { newValues: input });
+      await copyCompanyTemplates({ db, companyId });
 
       if (input.seedStarterData) {
         await seedStarterCompanyData(companyId);
@@ -174,7 +176,7 @@ export const orgRouter = createRouter({
     .input(z.object({ companyId: z.number(), name: z.string().min(2), supplier: z.string().optional(), notes: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       requireRequestedCompany(ctx.user!, input.companyId);
-      const [{ id }] = await getDb().insert(s.geneticLines).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.geneticLines).values(input).returning({ id: s.geneticLines.id });
       await audit("genetic_lines", id, "create", { newValues: input });
       return { id };
     }),
@@ -215,7 +217,7 @@ export const orgRouter = createRouter({
       const [{ id }] = await getDb().insert(s.farms).values({
         ...input, countryCode: input.countryCode.toUpperCase(),
         lat: input.lat.toFixed(5), lng: input.lng.toFixed(5),
-      }).$returningId();
+      }).returning({ id: s.farms.id });
       await audit("farms", id, "create", { newValues: input });
       return { id };
     }),
@@ -270,13 +272,13 @@ export const orgRouter = createRouter({
         lengthM: (input.lengthM ?? 0).toFixed(1), widthM: (input.widthM ?? 0).toFixed(1), heightM: (input.heightM ?? 0).toFixed(1),
         feederCount: input.feederCount ?? 0, drinkerCount: input.drinkerCount ?? 0,
         lightingLux: input.lightingLux ?? 0, lightingHours: (input.lightingHours ?? 0).toFixed(1), ventilationM3h: input.ventilationM3h ?? 0,
-      }).$returningId();
+      }).returning({ id: s.houses.id });
       await audit("houses", id, "create", { newValues: input });
       for (let i = 0; i < input.sectorCount; i++) {
         const [{ id: sid }] = await db.insert(s.sectors).values({
           houseId: id, name: `Sektor ${String.fromCharCode(65 + i)}`,
           areaM2: (input.areaM2 / input.sectorCount).toFixed(1),
-        }).$returningId();
+        }).returning({ id: s.sectors.id });
         await audit("sectors", sid, "create", { newValues: { houseId: id, index: i } });
       }
       return { id };
@@ -294,7 +296,7 @@ export const orgRouter = createRouter({
       await requireHouseTenant(ctx.user!, input.id);
       const db = getDb();
       const [old] = await db.select().from(s.houses).where(eq(s.houses.id, input.id));
-      const data: Record<string, string> = {};
+      const data: Record<string, string | number> = {};
       if (input.name) data.name = input.name;
       if (input.areaM2) data.areaM2 = input.areaM2.toFixed(1);
       if (input.maxDensityKgM2) data.maxDensityKgM2 = input.maxDensityKgM2.toFixed(1);
@@ -351,7 +353,7 @@ export const orgRouter = createRouter({
         initialCount: input.initialCount, currentCount: input.initialCount,
         startDate: input.startDate, plannedEndDate: end.toISOString().slice(0, 10),
         chickSupplier: input.chickSupplier, chickPrice: (input.chickPrice ?? 1.6).toFixed(3),
-      }).$returningId();
+      }).returning({ id: s.batches.id });
       await audit("batches", id, "create", { newValues: input });
       await generateSchedule(id, input.startDate, input.sex);
       return { id };
@@ -475,7 +477,7 @@ export const orgRouter = createRouter({
             geneticLineId: src.geneticLineId, sex: src.sex, chickSupplier: src.chickSupplier,
             chickPrice: src.chickPrice, startDate: src.startDate, plannedEndDate: src.plannedEndDate,
             initialCount: input.birdCount, currentCount: input.birdCount,
-          }).$returningId();
+          }).returning({ id: s.batches.id });
           targetId = id;
         }
         const docNo = `TR/${new Date().getFullYear()}/${String(Date.now() % 100000).padStart(5, "0")}`;

@@ -169,7 +169,7 @@ async function seed() {
   const companyIds: number[] = [];
   for (const c of COMPANIES) {
     const [{ id }] = await db.insert(schema.companies)
-      .values({ name: c.name, countryCode: c.cc, baseCurrency: "EUR" }).$returningId();
+      .values({ name: c.name, countryCode: c.cc, baseCurrency: "EUR" }).returning({ id: schema.feedIngredients.id });
     companyIds.push(id);
     await db.insert(schema.auditLog).values({ tableName: "companies", recordId: id, action: "create", newValues: { name: c.name }, author: "seed" });
   }
@@ -179,7 +179,7 @@ async function seed() {
   for (let ci = 0; ci < companyIds.length; ci++) {
     for (const l of LINES.slice(0, ci === 2 ? 2 : 4)) {
       const [{ id }] = await db.insert(schema.geneticLines)
-        .values({ companyId: companyIds[ci], name: l, supplier: pick(SUPPLIERS) }).$returningId();
+        .values({ companyId: companyIds[ci], name: l, supplier: pick(SUPPLIERS) }).returning({ id: schema.auditLog.id });
       lineIds[ci].push(id);
     }
   }
@@ -193,7 +193,7 @@ async function seed() {
       lysinePct: ing.lys.toFixed(3), methioninePct: ing.met.toFixed(3),
       fiberPct: ing.fiber.toFixed(2), fatPct: ing.fat.toFixed(2),
       calciumPct: ing.ca.toFixed(2), phosphorusPct: ing.p.toFixed(2), stockTons: ing.stock.toFixed(2),
-    }).$returningId();
+    }).returning({ id: schema.feedIngredients.id });
     ingredientIds.push(id);
   }
 
@@ -207,7 +207,7 @@ async function seed() {
     const [{ id: farmId }] = await db.insert(schema.farms).values({
       companyId, name: f.name, countryCode: f.cc, city: f.city,
       lat: f.lat.toFixed(5), lng: f.lng.toFixed(5), capacity: f.cap,
-    }).$returningId();
+    }).returning({ id: schema.farms.id });
 
     // magazyn + silosy na fermę
     await db.insert(schema.warehouses).values({ farmId, name: `Magazyn ${f.city}`, capacityTons: ri(200, 600).toFixed(1) });
@@ -226,7 +226,7 @@ async function seed() {
         farmId, name: isBrooder ? "Odchowalnia A" : `Kurnik ${h - 1}`,
         houseType: isBrooder ? "brooder" : "finisher",
         areaM2: area.toFixed(1), maxDensityKgM2: isBrooder ? "25.0" : "42.0",
-      }).$returningId();
+      }).returning({ id: schema.warehouses.id });
       if (!isBrooder) finisherHouseIds.push(houseId);
 
       // sektory dla kurników
@@ -269,7 +269,7 @@ async function seed() {
           plannedEndDate: dateStr(daysAgo(age - (isTom ? 140 : 115))),
           initialCount: initial, currentCount: current, soldCount: sold,
           status: closed ? "closed" : "active",
-        }).$returningId();
+        }).returning({ id: schema.sectors.id });
         await db.insert(schema.auditLog).values({ tableName: "batches", recordId: batchId, action: "create", newValues: { initialCount: initial }, author: "seed" });
 
         // Workflow Engine — pełny harmonogram
@@ -406,7 +406,7 @@ async function seed() {
       geneticLineId: src.geneticLineId, sex: src.sex, chickSupplier: src.chickSupplier,
       chickPrice: src.chickPrice, startDate: src.startDate, plannedEndDate: src.plannedEndDate,
       initialCount: cnt, currentCount: cnt,
-    }).$returningId();
+    }).returning({ id: schema.auditLog.id });
     await db.update(schema.batches).set({ currentCount: src.currentCount - cnt })
       .where((await import("drizzle-orm")).eq(schema.batches.id, src.id));
     await db.insert(schema.transfers).values({
@@ -446,7 +446,7 @@ async function seed() {
       companyId: companyIds[0], name: r.name, ageGroup: r.age, strategy: r.strat,
       costPerTon: r.cost.toFixed(2), proteinPct: r.protein.toFixed(2),
       energyKcal: r.energy, lysinePct: r.lys.toFixed(3), explanation: r.expl,
-    }).$returningId();
+    }).returning({ id: schema.transfers.id });
     for (const it of r.items) {
       await db.insert(schema.recipeItems).values({ recipeId: rid, ingredientId: it.id, percent: it.pct.toFixed(2) });
     }

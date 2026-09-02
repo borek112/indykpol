@@ -58,7 +58,10 @@ export async function materializeBatchDayFact(companyId: number, batchId: number
     co2Ppm: climate[0]?.co2Ppm ?? null, ammoniaPpm: daily?.ammoniaPpm ?? climate[0]?.ammoniaPpm ?? null,
     inputSnapshot: snapshot, sourceWatermark: new Date(),
   };
-  await db.insert(s.batchDayFacts).values(values).onDuplicateKeyUpdate({ set: values });
+  await db.insert(s.batchDayFacts).values(values).onConflictDoUpdate({
+    target: [s.batchDayFacts.batchId, s.batchDayFacts.day],
+    set: values,
+  });
   const [fact] = await db.select().from(s.batchDayFacts)
     .where(and(eq(s.batchDayFacts.batchId, batchId), eq(s.batchDayFacts.day, day))).limit(1);
   if (!fact) throw new Error("Failed to materialize batch-day fact.");
@@ -115,7 +118,7 @@ export async function runPrediction(companyId: number, batchId: number, day: str
     companyId, batchId, houseId: fact.houseId, ruleId: rule.id, ruleVersion: rule.version,
     curveId: currentCurve.id, curveVersion: currentCurve.version, asOf: new Date(`${day}T23:59:59.999Z`),
     inputSnapshot: fact.inputSnapshot, output, confidence: confidence.toFixed(4), sourceWatermark: fact.sourceWatermark,
-  }).$returningId();
+  }).returning({ id: s.batchDayFacts.id });
   if (riskScore >= 40) {
     await db.insert(s.predictionFindings).values({
       predictionRunId: runId, companyId, batchId, type: "target_deviation",
