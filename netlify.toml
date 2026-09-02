@@ -5,11 +5,6 @@
   functions = "netlify/functions"
 
 [[redirects]]
-  from = "/.netlify/functions/trpc/*"
-  to = "/.netlify/functions/trpc/:splat"
-  status = 200
-
-[[redirects]]
   from = "/api/trpc/*"
   to = "/.netlify/functions/trpc/:splat"
   status = 200
@@ -17,7 +12,7 @@
 [[redirects]]
   from = "/api/demo-login"
   to = "/.netlify/functions/demo-login"
-  status = 302
+  status = 200
 
 [[redirects]]
   from = "/*"
