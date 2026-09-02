@@ -54,12 +54,16 @@ export default function Structure() {
 
   const [farmForm, setFarmForm] = useState({ name: "", countryCode: "PL", city: "", lat: 52, lng: 19, capacity: 50000 });
   const [companyForm, setCompanyForm] = useState({ name: "", countryCode: "PL", baseCurrency: "EUR", seedStarterData: true });
+  const [createCompanyError, setCreateCompanyError] = useState<string | null>(null);
   const [houseForm, setHouseForm] = useState({ name: "", houseType: "finisher" as "brooder" | "finisher", areaM2: 1800, sectorCount: 0, lengthM: 0, widthM: 0, heightM: 0, feederCount: 0, drinkerCount: 0, lightingLux: 0, lightingHours: 0, ventilationM3h: 0 });
   const [batchForm, setBatchForm] = useState({
     code: "", geneticLine: "BUT Big 6", sex: "toms" as "toms" | "hens" | "mixed",
     initialCount: 10000, startDate: new Date().toISOString().slice(0, 10), chickSupplier: "", chickPrice: 1.6,
   });
   const [lineForm, setLineForm] = useState({ name: "", supplier: "" });
+  const isCompanyFormValid = companyForm.name.trim().length >= 2
+    && companyForm.countryCode.trim().length === 2
+    && companyForm.baseCurrency.trim().length === 3;
 
   return (
     <div className="space-y-6">
@@ -79,7 +83,10 @@ export default function Structure() {
             ))}
           </select>
           <button
-            onClick={() => setForm({ kind: "company" })}
+            onClick={() => {
+              setCreateCompanyError(null);
+              setForm({ kind: "company" });
+            }}
             className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500"
           >
             <Plus className="h-4 w-4" /> Firma
@@ -113,16 +120,29 @@ export default function Structure() {
           </div>
           <div className="mt-4 flex gap-2">
             <button
-              disabled={createCompany.isPending}
-              onClick={() => {
-                createCompany.mutate(companyForm);
-                setForm(null);
-                setCompanyForm({ name: "", countryCode: "PL", baseCurrency: "EUR", seedStarterData: true });
+              disabled={createCompany.isPending || !isCompanyFormValid}
+              onClick={async () => {
+                setCreateCompanyError(null);
+                try {
+                  await createCompany.mutateAsync({
+                    ...companyForm,
+                    name: companyForm.name.trim(),
+                    countryCode: companyForm.countryCode.trim().toUpperCase(),
+                    baseCurrency: companyForm.baseCurrency.trim().toUpperCase(),
+                  });
+                  setForm(null);
+                  setCompanyForm({ name: "", countryCode: "PL", baseCurrency: "EUR", seedStarterData: true });
+                } catch (error) {
+                  setCreateCompanyError(error instanceof Error ? error.message : "Nie udało się utworzyć firmy");
+                }
               }}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
             >Utwórz firmę</button>
-            <button onClick={() => setForm(null)} className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">Anuluj</button>
+            <button onClick={() => { setCreateCompanyError(null); setForm(null); }} className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">Anuluj</button>
           </div>
+          {createCompanyError && (
+            <p className="mt-2 text-sm text-red-400">{createCompanyError}</p>
+          )}
         </div>
       )}
 
