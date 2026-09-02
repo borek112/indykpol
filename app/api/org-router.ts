@@ -294,7 +294,7 @@ export const orgRouter = createRouter({
       await requireHouseTenant(ctx.user!, input.id);
       const db = getDb();
       const [old] = await db.select().from(s.houses).where(eq(s.houses.id, input.id));
-      const data: Record<string, string> = {};
+      const data: Record<string, string | number> = {};
       if (input.name) data.name = input.name;
       if (input.areaM2) data.areaM2 = input.areaM2.toFixed(1);
       if (input.maxDensityKgM2) data.maxDensityKgM2 = input.maxDensityKgM2.toFixed(1);

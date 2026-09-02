@@ -226,7 +226,7 @@ export const commandRouter = createRouter({
       if (dev > 12) return { ingredient: i.name, signal: "avoid" as const, detail: `${i.name}: cena ${pricePln.toFixed(0)} PLN/t o ${dev.toFixed(0)}% powyżej benchmarku UE (${ref} PLN/t). Nie kupuj obecnie — rozważ zamiennik lub odłóż zakup.`, deviationPct: dev };
       if (dev < -8) return { ingredient: i.name, signal: "buy" as const, detail: `${i.name}: cena ${pricePln.toFixed(0)} PLN/t o ${Math.abs(dev).toFixed(0)}% poniżej benchmarku UE (${ref} PLN/t). Warto skontraktować dostawę na 4–6 tygodni.`, deviationPct: dev };
       return { ingredient: i.name, signal: "neutral" as const, detail: `${i.name}: cena w zgodzie z rynkiem (${pricePln.toFixed(0)} PLN/t, odchylenie ${dev.toFixed(0)}%).`, deviationPct: dev };
-    }).filter(Boolean);
+    }).filter((signal): signal is NonNullable<typeof signal> => signal !== null);
     const pending = orders.filter((o) => o.orderStatus === "sent" || o.orderStatus === "confirmed").length;
     return {
       signals,
