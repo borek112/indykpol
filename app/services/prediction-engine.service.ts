@@ -115,7 +115,7 @@ export async function runPrediction(companyId: number, batchId: number, day: str
     companyId, batchId, houseId: fact.houseId, ruleId: rule.id, ruleVersion: rule.version,
     curveId: currentCurve.id, curveVersion: currentCurve.version, asOf: new Date(`${day}T23:59:59.999Z`),
     inputSnapshot: fact.inputSnapshot, output, confidence: confidence.toFixed(4), sourceWatermark: fact.sourceWatermark,
-  }).$returningId();
+  }).returning({ id: s.batchDayFacts.id });
   if (riskScore >= 40) {
     await db.insert(s.predictionFindings).values({
       predictionRunId: runId, companyId, batchId, type: "target_deviation",

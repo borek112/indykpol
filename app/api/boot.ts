@@ -59,7 +59,7 @@ async function establishDemoSession(c: Context<{ Bindings: HttpBindings }>, comp
       name,
       role: "user",
       companyId,
-    }).$returningId();
+    }).returning({ id: users.id });
     [user] = await db.select().from(users).where(eq(users.id, id));
   } else if (user.companyId !== companyId) {
     await db.update(users).set({ companyId, name }).where(eq(users.id, user.id));
@@ -95,7 +95,7 @@ if (!env.isProduction) {
     const companyId = company?.id ?? (await db.insert(companies).values({
         name: "Bloody Turkey Demo",
         countryCode: "PL",
-    }).$returningId())[0].id;
+    }).returning({ id: companies.id }))[0].id;
     await establishDemoSession(c, companyId, env.ownerUnionId || "dev-owner", "Local Demo");
     return c.redirect("/");
   });
@@ -152,7 +152,7 @@ app.post("/api/v1/ingest", async (c) => {
         ammoniaPpm: body.ammoniaPpm != null ? String(body.ammoniaPpm) : null,
         ventilationPct: body.ventilationPct != null ? Number(body.ventilationPct) : null,
         source: `api:${apiKey.keyPrefix}`,
-      }).$returningId();
+      }).returning({ id: s.climateLogs.id });
       return c.json({ ok: true, inserted: "climate", id });
     }
     case "feedUsage": {
@@ -161,7 +161,7 @@ app.post("/api/v1/ingest", async (c) => {
         batchId: Number(body.batchId),
         day: String(body.day ?? new Date().toISOString().slice(0, 10)),
         kg: String(body.kg),
-      }).$returningId();
+      }).returning({ id: s.feedUsages.id });
       return c.json({ ok: true, inserted: "feedUsage", id });
     }
     case "mortality": {
@@ -171,7 +171,7 @@ app.post("/api/v1/ingest", async (c) => {
         day: String(body.day ?? new Date().toISOString().slice(0, 10)),
         count: Number(body.count),
         cause: String(body.cause ?? "zgłoszenie API"),
-      }).$returningId();
+      }).returning({ id: s.mortalities.id });
       return c.json({ ok: true, inserted: "mortality", id });
     }
     case "weighing": {
@@ -183,7 +183,7 @@ app.post("/api/v1/ingest", async (c) => {
         sampleSize: Number(body.sampleSize ?? 1),
         avgWeightG: Number(body.avgWeightG),
         operator: `api:${apiKey.keyPrefix}`,
-      }).$returningId();
+      }).returning({ id: s.weighings.id });
       return c.json({ ok: true, inserted: "weighing", id });
     }
     default:
@@ -202,7 +202,7 @@ app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;
 
-if (env.isProduction) {
+if (env.isProduction && process.env.NETLIFY !== "true") {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
   serveStaticFiles(app);

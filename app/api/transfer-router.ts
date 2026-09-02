@@ -132,7 +132,7 @@ export const transferRouter = createRouter({
       const raw = `btk_${crypto.randomBytes(24).toString("hex")}`;
       const keyHash = crypto.createHash("sha256").update(raw).digest("hex");
       const keyPrefix = raw.slice(0, 12);
-      const [{ id }] = await getDb().insert(s.apiKeys).values({ label: input.label, keyHash, keyPrefix }).$returningId();
+      const [{ id }] = await getDb().insert(s.apiKeys).values({ label: input.label, keyHash, keyPrefix }).returning({ id: t.table.id });
       // pełny klucz zwracamy RAZ — potem przechowujemy tylko hash
       return { id, label: input.label, apiKey: raw, keyPrefix };
     }),

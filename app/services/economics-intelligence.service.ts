@@ -202,7 +202,7 @@ export async function createScenario(input: CreateScenarioInput, user: string) {
     predictedCostPerKg: predictedCostPerKg.toFixed(4),
     impactOnProfit: impactOnProfit.toFixed(2),
     createdBy: user,
-  }).$returningId();
+  }).returning({ id: s.scenarioResults.id });
 
   return {
     id, batchId: input.batchId, name: input.name,
@@ -474,7 +474,7 @@ export async function generateExecutiveSummary(batchId: number, period: SummaryP
     endForecast: result.endForecast,
     recommendations,
     metricsSnapshot: result.metricsSnapshot,
-  }).$returningId();
+  }).returning({ id: s.economicsAiAdvisors.id });
   return { id, ...result };
 }
 

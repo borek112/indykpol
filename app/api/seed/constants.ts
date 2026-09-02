@@ -1,0 +1,20 @@
+export const DEMO_COMPANY_NAMES = ["Bródka Demo", "Farma Trójna"] as const;
+
+export const DEMO_STANDARD_CODES = [
+  "DEMO-STARTER-TOMS",
+  "DEMO-STARTER-HENS",
+  "DEMO-STARTER-MIXED",
+  "DEMO-GROWER-TOMS",
+  "DEMO-GROWER-HENS",
+  "DEMO-GROWER-MIXED",
+  "DEMO-FINISHER-TOMS",
+  "DEMO-FINISHER-HENS",
+  "DEMO-FINISHER-MIXED",
+] as const;
+
+export const DEMO_BATCH_CODES = [
+  "DEMO-001-FINISHER",
+  "DEMO-002-GROWER",
+  "TROJNA-001-STARTER",
+  "TROJNA-002-FINISHER",
+] as const;

@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { createRouter, authedQuery } from "./middleware";
+import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import * as s from "@db/schema";
-import { eq, desc, sql, and, ne } from "drizzle-orm";
+import { eq, desc, sql, and, ne, inArray } from "drizzle-orm";
 import { requireBatchTenant, requireTenantCompany } from "./tenant";
+import { DEMO_COMPANY_NAMES } from "./seed/constants";
 
 const num = (v: unknown) => Number(v ?? 0);
 
@@ -52,6 +53,24 @@ export function kpisFromAgg(b: s.Batch, agg: Agg) {
   return { batch: b, lastWeighing: lastW ?? null, avgWeightG: avgG, ageDays, biomassKg, fcr, livability, adgG, epef, mortalityPct, feedKg, dead };
 }
 
+async function listBatchesForCompanies(companyIds: number[]) {
+  const db = getDb();
+  const [batchRows, houseRows, farmRows, agg] = await Promise.all([
+    db.select().from(s.batches),
+    db.select().from(s.houses),
+    db.select().from(s.farms).where(inArray(s.farms.companyId, companyIds)),
+    loadAggregates(),
+  ]);
+  const houseIds = new Set(houseRows.filter((house) => farmRows.some((farm) => farm.id === house.farmId)).map((house) => house.id));
+  return batchRows.filter((batch) => houseIds.has(batch.houseId)).map((batch) => {
+    const kpi = kpisFromAgg(batch, agg);
+    const house = houseRows.find((row) => row.id === batch.houseId) ?? null;
+    const farm = house ? farmRows.find((row) => row.id === house.farmId) ?? null : null;
+    const densityKgM2 = house ? kpi.biomassKg / num(house.areaM2) : 0;
+    return { ...kpi, house, farm, densityKgM2 };
+  });
+}
+
 /* ---------------- pomocnicze KPI ---------------- */
 
 async function batchKpis(batchId: number) {
@@ -98,21 +117,7 @@ const orgRouter = createRouter({
 
 const productionRouter = createRouter({
   batches: authedQuery.query(async ({ ctx }) => {
-    const companyId = requireTenantCompany(ctx.user!);
-    const db = getDb();
-    const [batchRows, houseRows, farmRows, agg] = await Promise.all([
-      db.select().from(s.batches), db.select().from(s.houses),
-      db.select().from(s.farms).where(eq(s.farms.companyId, companyId)),
-      loadAggregates(),
-    ]);
-    const houseIds = new Set(houseRows.filter((h) => farmRows.some((f) => f.id === h.farmId)).map((h) => h.id));
-    return batchRows.filter((b) => houseIds.has(b.houseId)).map((b) => {
-      const k = kpisFromAgg(b, agg);
-      const house = houseRows.find((h) => h.id === b.houseId) ?? null;
-      const farm = house ? farmRows.find((f) => f.id === house.farmId) ?? null : null;
-      const density = house ? k.biomassKg / num(house.areaM2) : 0;
-      return { ...k, house, farm, densityKgM2: density };
-    });
+    return listBatchesForCompanies([requireTenantCompany(ctx.user!)]);
   }),
 
   batchDetail: authedQuery
@@ -156,7 +161,7 @@ const productionRouter = createRouter({
         minG: input.minG ?? input.avgWeightG - 2 * sd,
         maxG: input.maxG ?? input.avgWeightG + 2 * sd,
         cv: cv.toFixed(2), operator: input.operator ?? "system",
-      }).$returningId();
+      }).returning({ id: s.weighings.id });
       // Event Engine: ważenie uruchamia Dynamic Select Engine
       await generateDynamicSelects(input.batchId, input.avgWeightG);
       return { id, cv };
@@ -173,7 +178,7 @@ const productionRouter = createRouter({
         batchId: input.batchId, name: input.name, criteria: input.criteria,
         origin: "manual", birdCount: input.birdCount, avgWeightG: input.avgWeightG,
         status: "ok",
-      }).$returningId();
+      }).returning({ id: s.selects.id });
       return { id };
     }),
 
@@ -326,7 +331,7 @@ const feedRouter = createRouter({
         strategy: input.strategy, costPerTon: best.cost.toFixed(2),
         proteinPct: best.protein.toFixed(2), energyKcal: Math.round(best.energy),
         lysinePct: best.lys.toFixed(3), explanation,
-      }).$returningId();
+      }).returning({ id: s.selects.id });
       for (const m of best.mix) {
         await db.insert(s.recipeItems).values({ recipeId: id, ingredientId: m.id, percent: m.pct.toFixed(2) });
       }
@@ -371,7 +376,7 @@ const healthRouter = createRouter({
         activeSubstance: input.activeSubstance, dose: input.dose,
         reason: input.reason, withdrawalDays: input.withdrawalDays,
         vet: input.vet, cost: (input.cost ?? 0).toFixed(2),
-      }).$returningId();
+      }).returning({ id: s.recipeItems.id });
       if (input.cost && input.cost > 0) {
         await db.insert(s.costs).values({
           batchId: input.batchId, category: "vet", amount: input.cost.toFixed(2),
@@ -566,6 +571,11 @@ const dashboardRouter = createRouter({
 });
 
 export const farmRouter = createRouter({
+  listBatches: publicQuery.query(async () => {
+    const companies = await getDb().select({ id: s.companies.id }).from(s.companies)
+      .where(and(inArray(s.companies.name, [...DEMO_COMPANY_NAMES]), ne(s.companies.status, "archived")));
+    return listBatchesForCompanies(companies.map((company) => company.id));
+  }),
   org: orgRouter,
   production: productionRouter,
   feed: feedRouter,

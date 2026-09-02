@@ -38,7 +38,7 @@ async function main() {
       nip: `${ri(100, 999)}-${ri(10, 99)}-${ri(10, 99)}-${ri(100, 999)}`,
       email: `kontakt@${name.toLowerCase().replace(/[^a-z]/g, "")}.eu`,
       phone: `+48 ${ri(500, 899)} ${ri(100, 999)} ${ri(100, 999)}`, rating: ri(3, 5),
-    }).$returningId();
+    }).returning({ id: s.suppliers.id });
     supplierIds.push(id);
   }
 

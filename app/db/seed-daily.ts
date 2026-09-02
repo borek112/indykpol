@@ -74,7 +74,7 @@ async function main() {
   ];
   for (const pd of programDefs) {
     const [{ id: pid }] = await db.insert(schema.feedPrograms)
-      .values({ companyId: companies[0].id, name: pd.name, sex: pd.sex }).$returningId();
+      .values({ companyId: companies[0].id, name: pd.name, sex: pd.sex }).returning({ id: schema.dailyLogs.id });
     for (const st of pd.stages) {
       await db.insert(schema.feedProgramStages).values({
         programId: pid, name: st.name, dayFrom: st.dayFrom, dayTo: st.dayTo,
