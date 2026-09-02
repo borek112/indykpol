@@ -32,7 +32,7 @@ export async function createVaccinationProgram(input: VaccinationProgramCreate) 
       description: input.description ?? null,
       isDefault: input.isDefault,
     } as never)
-    .$returningId();
+    .returning({ id: s.vaccinationPrograms.id });
   for (const step of input.steps) {
     await db.insert(s.vaccinationProgramSteps).values({ programId, ...step } as never);
   }
@@ -87,7 +87,7 @@ export async function createHealthRecord(input: HealthRecordCreate) {
   const [{ id }] = await db
     .insert(s.healthRecords)
     .values({ ...input, cost: input.cost != null ? String(input.cost) : null } as never)
-    .$returningId();
+    .returning({ id: s.vaccinationProgramSteps.id });
   return { id };
 }
 
@@ -184,7 +184,7 @@ export async function calculateRiskScore(batchId: number): Promise<RiskScoreResu
   const [{ id }] = await db
     .insert(s.riskScores)
     .values({ batchId, ...result, factors: result.factors as never } as never)
-    .$returningId();
+    .returning({ id: s.riskScores.id });
   return { id, ...result };
 }
 
@@ -287,7 +287,7 @@ function immediateActions(diseaseName: string, input: AiAdvisorRequest): string[
 
 export async function addDiseaseReference(input: DiseaseReferenceCreate) {
   const db = getDb();
-  const [{ id }] = await db.insert(s.diseaseReferences).values(input as never).$returningId();
+  const [{ id }] = await db.insert(s.diseaseReferences).values(input as never).returning({ id: s.aiAdvisorLogs.id });
   return { id };
 }
 

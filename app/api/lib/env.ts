@@ -29,7 +29,10 @@ function optional(name: string, fallback = ""): string {
 
 export const env = {
   isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: required("DATABASE_URL"),
+  databaseType: process.env.DATABASE_TYPE || "sqlite",
+  databaseUrl: process.env.DATABASE_URL || process.env.TURSO_DB_URL || "file:./dev.db",
+  tursoDbUrl: process.env.TURSO_DB_URL || process.env.DATABASE_URL || "file:./dev.db",
+  tursoAuthToken: process.env.TURSO_AUTH_TOKEN || "",
   sessionSecret: process.env.SESSION_SECRET || process.env.JWT_SECRET || (
     process.env.NODE_ENV === "production" ? required("SESSION_SECRET") : "bte-local-session-secret"
   ),

@@ -27,7 +27,7 @@ const healthIntelRouter = createRouter({
       severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
     }))
     .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.diseases).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.diseases).values(input).returning({ id: s.diseases.id });
       await audit("diseases", id, "create", { newValues: input });
       return { id };
     }),
@@ -41,7 +41,7 @@ const healthIntelRouter = createRouter({
       vet: z.string().default("panel"), verdict: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.necropsy).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.necropsy).values(input).returning({ id: s.necropsy.id });
       await audit("necropsy", id, "create", { newValues: input, author: input.vet });
       return { id };
     }),
@@ -58,7 +58,7 @@ const healthIntelRouter = createRouter({
       const [{ id }] = await db.insert(s.withdrawalPeriods).values({
         treatmentId: input.treatmentId, batchId: t.batchId,
         medicine: t.product, startDay: start, withdrawalDays: input.withdrawalDays, safeFrom: safe,
-      }).$returningId();
+      }).returning({ id: s.withdrawalPeriods.id });
       return { id, safeFrom: safe };
     }),
   withdrawals: authedQuery.query(async () =>
@@ -81,7 +81,7 @@ const lotsRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const [{ id }] = await db.insert(s.warehouseLots).values({ ...input, qty: String(input.qty) }).$returningId();
+      const [{ id }] = await db.insert(s.warehouseLots).values({ ...input, qty: String(input.qty) }).returning({ id: s.warehouseLots.id });
       await db.insert(s.stockMovements).values({ lotId: id, kind: "in", qty: String(input.qty), reference: "przyjęcie partii", day: input.receivedDate });
       await audit("warehouse_lots", id, "create", { newValues: input });
       return { id };
@@ -163,7 +163,7 @@ const economicsIntelRouter = createRouter({
       const [{ id }] = await db.insert(s.scenarios).values({
         batchId: input.batchId ?? null, name: input.name,
         assumptions: { ...input }, result,
-      }).$returningId();
+      }).returning({ id: s.stockMovements.id });
       return { id, result };
     }),
   scenarios: authedQuery.query(async () => getDb().select().from(s.scenarios).orderBy(desc(s.scenarios.id)).limit(25)),
@@ -194,7 +194,7 @@ const feedIntelRouter = createRouter({
   logRecipeChange: authedQuery
     .input(z.object({ recipeId: z.number(), changeNote: z.string(), expertReport: z.string().optional(), author: z.string().default("panel") }))
     .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.recipeHistory).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.recipeHistory).values(input).returning({ id: s.benchmarks.id });
       await audit("recipe_history", id, "create", { newValues: input, author: input.author });
       return { id };
     }),
@@ -228,7 +228,7 @@ const integrationsRouter = createRouter({
   register: authedQuery
     .input(z.object({ sourceModule: z.string(), targetModule: z.string(), kind: z.enum(["api", "webhook", "device", "file"]).default("api"), config: z.record(z.string(), z.unknown()).optional() }))
     .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.integrations).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.integrations).values(input).returning({ id: s.forecastAccuracy.id });
       return { id };
     }),
 });
@@ -240,7 +240,7 @@ const entityRouter = createRouter({
   create: authedQuery
     .input(z.object({ entity: z.string(), data: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.dynamicEntities).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.dynamicEntities).values(input).returning({ id: s.dynamicEntities.id });
       return { id };
     }),
   update: authedQuery

@@ -176,7 +176,7 @@ export async function searchKnowledge(input: KnowledgeSearchInput) {
 
 export async function addKnowledgeEntry(data: KnowledgeEntryCreate) {
   const db = getDb();
-  const [{ id }] = await db.insert(s.knowledgeEntries).values(data as never).$returningId();
+  const [{ id }] = await db.insert(s.knowledgeEntries).values(data as never).returning({ id: s.knowledgeEntries.id });
   return { id };
 }
 
@@ -235,7 +235,7 @@ export async function runExperiment(input: { name: string; description?: string;
       results: results as never,
       completedAt: new Date(),
     } as never)
-    .$returningId();
+    .returning({ id: s.experimentScenarios.id });
 
   return { id, ...results };
 }
@@ -309,7 +309,7 @@ export async function forecastBatch(batchId: number) {
       assumptions: summary.assumptions as never,
       confidenceIntervals: summary.confidenceIntervals as never,
     } as never)
-    .$returningId();
+    .returning({ id: s.batchForecasts.id });
 
   return { forecastId: id, batchId, weeklyForecasts: weekly, summary };
 }
@@ -328,7 +328,7 @@ export async function createFeedAlert(data: FeedAlertCreate) {
       actualValue: data.actualValue != null ? String(data.actualValue) : null,
       thresholdValue: data.thresholdValue != null ? String(data.thresholdValue) : null,
     } as never)
-    .$returningId();
+    .returning({ id: s.feedAlerts.id });
   return { id };
 }
 

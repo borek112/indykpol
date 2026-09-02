@@ -1,21 +1,49 @@
-import {
-  mysqlTable,
-  mysqlEnum,
-  serial,
-  varchar,
-  text,
-  timestamp,
-  bigint,
-  int,
-  decimal,
-  boolean,
-  date,
-  json,
-  index,
-  uniqueIndex,
-} from "drizzle-orm/mysql-core";
+import { integer, int, numeric, sqliteTable, text, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-export const users = mysqlTable("users", {
+function sqliteEnum<const TValues extends Readonly<[string, ...string[]]>>(
+  name: string,
+  values: TValues,
+) {
+  return text(name, { enum: values });
+}
+
+function serial(name: string) {
+  const column = integer(name, { mode: "number" });
+  const primaryKey = column.primaryKey.bind(column);
+  column.primaryKey = (config?: Parameters<typeof primaryKey>[0]) =>
+    primaryKey({ autoIncrement: true, ...(config ?? {}) });
+  return column;
+}
+
+function varchar(name: string, config?: { length?: number }) {
+  return text(name, { length: config?.length });
+}
+
+function timestamp(name: string, _config?: unknown) {
+  return integer(name, { mode: "timestamp_ms" });
+}
+
+function bigint(name: string, _config?: unknown) {
+  return integer(name, { mode: "number" });
+}
+
+function decimal(name: string, _config?: unknown) {
+  return numeric(name);
+}
+
+function boolean(name: string, _config?: unknown) {
+  return integer(name, { mode: "boolean" });
+}
+
+function date(name: string, _config?: unknown) {
+  return text(name);
+}
+
+function json(name: string, _config?: unknown) {
+  return text(name, { mode: "json" });
+}
+
+export const users = sqliteTable("users", {
   id: serial("id").primaryKey(),
   unionId: varchar("unionId", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
@@ -23,7 +51,7 @@ export const users = mysqlTable("users", {
   avatar: text("avatar"),
   passwordHash: varchar("passwordHash", { length: 255 }),
   sessionVersion: int("sessionVersion").notNull().default(1),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: sqliteEnum("role", ["user", "admin"]).default("user").notNull(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
@@ -40,11 +68,11 @@ export type InsertUser = typeof users.$inferInsert;
    AUDIT TRAIL — globalny, każda tabela biznesowa
    ============================================================ */
 
-export const auditLog = mysqlTable("audit_log", {
+export const auditLog = sqliteTable("audit_log", {
   id: serial("id").primaryKey(),
   tableName: varchar("tableName", { length: 64 }).notNull(),
   recordId: bigint("recordId", { mode: "number", unsigned: true }).notNull(),
-  action: mysqlEnum("action", ["create", "update", "delete"]).notNull(),
+  action: sqliteEnum("action", ["create", "update", "delete"]).notNull(),
   oldValues: json("oldValues"),
   newValues: json("newValues"),
   author: varchar("author", { length: 255 }).notNull().default("system"),
@@ -56,7 +84,7 @@ export const auditLog = mysqlTable("audit_log", {
    ============================================================ */
 
 const base = {
-  status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+  status: sqliteEnum("status", ["active", "archived"]).notNull().default("active"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()
@@ -65,7 +93,7 @@ const base = {
   updatedBy: varchar("updatedBy", { length: 255 }).notNull().default("system"),
 };
 
-export const companies = mysqlTable("companies", {
+export const companies = sqliteTable("companies", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   countryCode: varchar("countryCode", { length: 2 }).notNull(),
@@ -73,7 +101,7 @@ export const companies = mysqlTable("companies", {
   ...base,
 });
 
-export const geneticLines = mysqlTable("genetic_lines", {
+export const geneticLines = sqliteTable("genetic_lines", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
@@ -82,7 +110,7 @@ export const geneticLines = mysqlTable("genetic_lines", {
   ...base,
 });
 
-export const farms = mysqlTable("farms", {
+export const farms = sqliteTable("farms", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -94,11 +122,11 @@ export const farms = mysqlTable("farms", {
   ...base,
 });
 
-export const houses = mysqlTable("houses", {
+export const houses = sqliteTable("houses", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  houseType: mysqlEnum("houseType", ["brooder", "finisher"]).notNull(),
+  houseType: sqliteEnum("houseType", ["brooder", "grower", "finisher"]).notNull(),
   areaM2: decimal("areaM2", { precision: 10, scale: 1 }).notNull(),
   maxDensityKgM2: decimal("maxDensityKgM2", { precision: 5, scale: 1 })
     .notNull()
@@ -114,7 +142,7 @@ export const houses = mysqlTable("houses", {
   ...base,
 });
 
-export const sectors = mysqlTable("sectors", {
+export const sectors = sqliteTable("sectors", {
   id: serial("id").primaryKey(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
@@ -126,14 +154,14 @@ export const sectors = mysqlTable("sectors", {
    PRODUKCJA
    ============================================================ */
 
-export const batches = mysqlTable("batches", {
+export const batches = sqliteTable("batches", {
   id: serial("id").primaryKey(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
   sectorId: bigint("sectorId", { mode: "number", unsigned: true }),
   geneticLineId: bigint("geneticLineId", { mode: "number", unsigned: true }),
   code: varchar("code", { length: 64 }).notNull(),
   geneticLine: varchar("geneticLine", { length: 128 }).notNull(),
-  sex: mysqlEnum("sex", ["toms", "hens", "mixed"]).notNull(),
+  sex: sqliteEnum("sex", ["toms", "hens", "mixed"]).notNull(),
   chickSupplier: varchar("chickSupplier", { length: 255 }),
   chickPrice: decimal("chickPrice", { precision: 8, scale: 3 })
     .notNull()
@@ -143,7 +171,7 @@ export const batches = mysqlTable("batches", {
   initialCount: int("initialCount").notNull(),
   currentCount: int("currentCount").notNull(),
   soldCount: int("soldCount").notNull().default(0),
-  status: mysqlEnum("status", ["active", "closed", "planned", "archived"])
+  status: sqliteEnum("status", ["active", "closed", "planned", "archived"])
     .notNull()
     .default("active"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -154,7 +182,7 @@ export const batches = mysqlTable("batches", {
   updatedBy: varchar("updatedBy", { length: 255 }).notNull().default("system"),
 });
 
-export const weighings = mysqlTable("weighings", {
+export const weighings = sqliteTable("weighings", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   weighedAt: timestamp("weighedAt").notNull(),
@@ -170,24 +198,24 @@ export const weighings = mysqlTable("weighings", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const selects = mysqlTable("selects", {
+export const selects = sqliteTable("selects", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
   criteria: varchar("criteria", { length: 255 }).notNull(),
-  origin: mysqlEnum("origin", ["manual", "dynamic"]).notNull().default("manual"),
+  origin: sqliteEnum("origin", ["manual", "dynamic"]).notNull().default("manual"),
   birdCount: int("birdCount").notNull(),
   avgWeightG: int("avgWeightG").notNull(),
   fcr: decimal("fcr", { precision: 5, scale: 3 }),
   mortalityPct: decimal("mortalityPct", { precision: 5, scale: 2 }),
   waterIntakeMl: int("waterIntakeMl"),
-  status: mysqlEnum("status", ["ok", "warning", "critical"])
+  status: sqliteEnum("status", ["ok", "warning", "critical"])
     .notNull()
     .default("ok"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const mortalities = mysqlTable("mortalities", {
+export const mortalities = sqliteTable("mortalities", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -195,7 +223,7 @@ export const mortalities = mysqlTable("mortalities", {
   cause: varchar("cause", { length: 255 }),
 });
 
-export const feedUsages = mysqlTable("feed_usages", {
+export const feedUsages = sqliteTable("feed_usages", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -203,7 +231,7 @@ export const feedUsages = mysqlTable("feed_usages", {
   recipeId: bigint("recipeId", { mode: "number", unsigned: true }),
 });
 
-export const litter = mysqlTable("litter", {
+export const litter = sqliteTable("litter", {
   id: serial("id").primaryKey(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
   material: varchar("material", { length: 128 }).notNull(),
@@ -218,7 +246,7 @@ export const litter = mysqlTable("litter", {
    DZIENNIK PRODUKCJI — dzienne wpisy (upadki, woda, pasza, środowisko)
    ============================================================ */
 
-export const dailyLogs = mysqlTable("daily_logs", {
+export const dailyLogs = sqliteTable("daily_logs", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -242,15 +270,15 @@ export const dailyLogs = mysqlTable("daily_logs", {
    PROGRAM ŻYWIENIA + WYDANIA PASZY
    ============================================================ */
 
-export const feedPrograms = mysqlTable("feed_programs", {
+export const feedPrograms = sqliteTable("feed_programs", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  sex: mysqlEnum("sex", ["toms", "hens", "mixed"]).notNull().default("mixed"),
+  sex: sqliteEnum("sex", ["toms", "hens", "mixed"]).notNull().default("mixed"),
   ...base,
 });
 
-export const feedProgramStages = mysqlTable("feed_program_stages", {
+export const feedProgramStages = sqliteTable("feed_program_stages", {
   id: serial("id").primaryKey(),
   programId: bigint("programId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
@@ -262,7 +290,7 @@ export const feedProgramStages = mysqlTable("feed_program_stages", {
   feedPerBirdG: int("feedPerBirdG"),
 });
 
-export const feedDeliveries = mysqlTable("feed_deliveries", {
+export const feedDeliveries = sqliteTable("feed_deliveries", {
   id: serial("id").primaryKey(),
   siloId: bigint("siloId", { mode: "number", unsigned: true }).notNull(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
@@ -276,7 +304,7 @@ export const feedDeliveries = mysqlTable("feed_deliveries", {
    TRANSFERY — pełna genealogia stad
    ============================================================ */
 
-export const transfers = mysqlTable("transfers", {
+export const transfers = sqliteTable("transfers", {
   id: serial("id").primaryKey(),
   sourceBatchId: bigint("sourceBatchId", { mode: "number", unsigned: true }).notNull(),
   targetBatchId: bigint("targetBatchId", { mode: "number", unsigned: true }).notNull(),
@@ -297,11 +325,11 @@ export const transfers = mysqlTable("transfers", {
    HARMONOGRAM PRODUKCJI (Workflow Engine)
    ============================================================ */
 
-export const scheduleEvents = mysqlTable("schedule_events", {
+export const scheduleEvents = sqliteTable("schedule_events", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
-  eventType: mysqlEnum("eventType", [
+  eventType: sqliteEnum("eventType", [
     "placement", "vaccination", "weighing", "feedChange", "litter",
     "treatment", "sampling", "washing", "disinfection", "housePrep", "sale",
   ]).notNull(),
@@ -315,7 +343,7 @@ export const scheduleEvents = mysqlTable("schedule_events", {
    ŻYWIENIE + MAGAZYN
    ============================================================ */
 
-export const feedIngredients = mysqlTable("feed_ingredients", {
+export const feedIngredients = sqliteTable("feed_ingredients", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(),
@@ -354,12 +382,12 @@ export const feedIngredients = mysqlTable("feed_ingredients", {
   ...base,
 });
 
-export const recipes = mysqlTable("recipes", {
+export const recipes = sqliteTable("recipes", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(),
   ageGroup: varchar("ageGroup", { length: 64 }).notNull(),
-  strategy: mysqlEnum("strategy", ["cheapest", "maxGrowth", "balanced"]).notNull(),
+  strategy: sqliteEnum("strategy", ["cheapest", "maxGrowth", "balanced"]).notNull(),
   costPerTon: decimal("costPerTon", { precision: 10, scale: 2 }).notNull(),
   proteinPct: decimal("proteinPct", { precision: 5, scale: 2 }).notNull(),
   energyKcal: int("energyKcal").notNull(),
@@ -368,14 +396,14 @@ export const recipes = mysqlTable("recipes", {
   /* Tom III — metadane receptury */
   version: int("version").notNull().default(1),
   author: varchar("author", { length: 128 }).notNull().default("system"),
-  status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("active"),
-  sex: mysqlEnum("sex", ["toms", "hens", "mixed"]).notNull().default("mixed"),
-  season: mysqlEnum("season", ["winter", "summer", "all"]).notNull().default("all"),
+  status: sqliteEnum("status", ["draft", "active", "archived"]).notNull().default("active"),
+  sex: sqliteEnum("sex", ["toms", "hens", "mixed"]).notNull().default("mixed"),
+  season: sqliteEnum("season", ["winter", "summer", "all"]).notNull().default("all"),
   genetics: varchar("genetics", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const recipeItems = mysqlTable("recipe_items", {
+export const recipeItems = sqliteTable("recipe_items", {
   id: serial("id").primaryKey(),
   recipeId: bigint("recipeId", { mode: "number", unsigned: true }).notNull(),
   ingredientId: bigint("ingredientId", { mode: "number", unsigned: true }).notNull(),
@@ -387,7 +415,7 @@ export const recipeItems = mysqlTable("recipe_items", {
    tworzenia równoległego systemu.
    ============================================================ */
 
-export const birdGroups = mysqlTable("bird_groups", {
+export const birdGroups = sqliteTable("bird_groups", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   farmId: bigint("farmId", { mode: "number", unsigned: true }),
@@ -395,12 +423,12 @@ export const birdGroups = mysqlTable("bird_groups", {
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
   code: varchar("code", { length: 64 }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
-  sex: mysqlEnum("sex", ["toms", "hens", "mixed"]).notNull().default("mixed"),
+  sex: sqliteEnum("sex", ["toms", "hens", "mixed"]).notNull().default("mixed"),
   ageGroup: int("ageGroup").notNull(),
   dayAge: int("dayAge").notNull().default(0),
   targetWeightKg: decimal("targetWeightKg", { precision: 8, scale: 3 }),
   productionGoal: varchar("productionGoal", { length: 128 }),
-  status: mysqlEnum("status", ["active", "planned", "archived"])
+  status: sqliteEnum("status", ["active", "planned", "archived"])
     .notNull()
     .default("active"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -411,12 +439,12 @@ export const birdGroups = mysqlTable("bird_groups", {
 });
 export type BirdGroup = typeof birdGroups.$inferSelect;
 
-export const dietRequirements = mysqlTable("diet_requirements", {
+export const dietRequirements = sqliteTable("diet_requirements", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 64 }).notNull(),
-  gender: mysqlEnum("gender", ["toms", "hens", "mixed"]).notNull().default("mixed"),
+  gender: sqliteEnum("gender", ["toms", "hens", "mixed"]).notNull().default("mixed"),
   ageGroup: int("ageGroup").notNull(),
   ageFromDays: int("ageFromDays").notNull(),
   ageToDays: int("ageToDays").notNull(),
@@ -431,7 +459,7 @@ export const dietRequirements = mysqlTable("diet_requirements", {
   sodiumPct: decimal("sodiumPct", { precision: 5, scale: 3 }).notNull().default("0"),
   extraParams: json("extraParams"),
   sourceReference: varchar("sourceReference", { length: 255 }),
-  status: mysqlEnum("status", ["draft", "active", "archived"])
+  status: sqliteEnum("status", ["draft", "active", "archived"])
     .notNull()
     .default("active"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -442,14 +470,14 @@ export const dietRequirements = mysqlTable("diet_requirements", {
 });
 export type DietRequirement = typeof dietRequirements.$inferSelect;
 
-export const recipeBalances = mysqlTable("recipe_balances", {
+export const recipeBalances = sqliteTable("recipe_balances", {
   id: serial("id").primaryKey(),
   recipeId: bigint("recipeId", { mode: "number", unsigned: true }).notNull(),
   parameterCode: varchar("parameterCode", { length: 64 }).notNull(),
   requiredValue: decimal("requiredValue", { precision: 12, scale: 4 }).notNull(),
   recipeValue: decimal("recipeValue", { precision: 12, scale: 4 }).notNull(),
   differenceValue: decimal("differenceValue", { precision: 12, scale: 4 }).notNull(),
-  status: mysqlEnum("status", ["PASS", "WARNING", "DEFICIT", "EXCESS"])
+  status: sqliteEnum("status", ["PASS", "WARNING", "DEFICIT", "EXCESS"])
     .notNull()
     .default("PASS"),
   unit: varchar("unit", { length: 32 }).notNull(),
@@ -457,7 +485,7 @@ export const recipeBalances = mysqlTable("recipe_balances", {
 });
 export type RecipeBalance = typeof recipeBalances.$inferSelect;
 
-export const batchDayProfiles = mysqlTable("batch_day_profiles", {
+export const batchDayProfiles = sqliteTable("batch_day_profiles", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   dayAge: int("dayAge").notNull(),
@@ -468,19 +496,19 @@ export const batchDayProfiles = mysqlTable("batch_day_profiles", {
   proteinTargetPct: decimal("proteinTargetPct", { precision: 5, scale: 2 }),
   energyTargetKcal: int("energyTargetKcal"),
   deviationPct: decimal("deviationPct", { precision: 6, scale: 2 }),
-  status: mysqlEnum("status", ["PASS", "WARNING", "DEFICIT", "EXCESS"]) 
+  status: sqliteEnum("status", ["PASS", "WARNING", "DEFICIT", "EXCESS"]) 
     .notNull()
     .default("PASS"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type BatchDayProfile = typeof batchDayProfiles.$inferSelect;
 
-export const houseQuickNotes = mysqlTable("house_quick_notes", {
+export const houseQuickNotes = sqliteTable("house_quick_notes", {
   id: serial("id").primaryKey(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
   author: varchar("author", { length: 255 }).notNull().default("system"),
-  category: mysqlEnum("category", [
+  category: sqliteEnum("category", [
     "OBSERVACJA",
     "ŻYWIENIE",
     "ZDROWIE",
@@ -499,7 +527,7 @@ export const houseQuickNotes = mysqlTable("house_quick_notes", {
 });
 export type HouseQuickNote = typeof houseQuickNotes.$inferSelect;
 
-export const litterEvents = mysqlTable("litter_events", {
+export const litterEvents = sqliteTable("litter_events", {
   id: serial("id").primaryKey(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
   sectorId: bigint("sectorId", { mode: "number", unsigned: true }),
@@ -508,7 +536,7 @@ export const litterEvents = mysqlTable("litter_events", {
   quantityKg: decimal("quantityKg", { precision: 10, scale: 2 }).notNull(),
   areaM2: decimal("areaM2", { precision: 10, scale: 2 }),
   kgPerM2: decimal("kgPerM2", { precision: 6, scale: 2 }),
-  reason: mysqlEnum("reason", [
+  reason: sqliteEnum("reason", [
     "wilgotna_sciółka",
     "zbrylenie",
     "okolice_poideł",
@@ -525,7 +553,7 @@ export const litterEvents = mysqlTable("litter_events", {
 });
 export type LitterEvent = typeof litterEvents.$inferSelect;
 
-export const warehouses = mysqlTable("warehouses", {
+export const warehouses = sqliteTable("warehouses", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -533,7 +561,7 @@ export const warehouses = mysqlTable("warehouses", {
   ...base,
 });
 
-export const silos = mysqlTable("silos", {
+export const silos = sqliteTable("silos", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
@@ -547,7 +575,7 @@ export const silos = mysqlTable("silos", {
    ZDROWIE
    ============================================================ */
 
-export const treatments = mysqlTable("treatments", {
+export const treatments = sqliteTable("treatments", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   startedAt: date("startedAt", { mode: "string" }).notNull(),
@@ -561,7 +589,7 @@ export const treatments = mysqlTable("treatments", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const vaccinations = mysqlTable("vaccinations", {
+export const vaccinations = sqliteTable("vaccinations", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -574,10 +602,10 @@ export const vaccinations = mysqlTable("vaccinations", {
    EKONOMIA
    ============================================================ */
 
-export const costs = mysqlTable("costs", {
+export const costs = sqliteTable("costs", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
-  category: mysqlEnum("category", [
+  category: sqliteEnum("category", [
     "chicks", "feed", "vet", "energy", "litter", "labor", "transport", "other",
   ]).notNull(),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
@@ -586,7 +614,7 @@ export const costs = mysqlTable("costs", {
   note: varchar("note", { length: 255 }),
 });
 
-export const sales = mysqlTable("sales", {
+export const sales = sqliteTable("sales", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -603,11 +631,11 @@ export const sales = mysqlTable("sales", {
    utrzymanie ruchu, bioasekuracja, dokumenty, zadania, komunikacja
    ============================================================ */
 
-export const suppliers = mysqlTable("suppliers", {
+export const suppliers = sqliteTable("suppliers", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  category: mysqlEnum("category", ["feed", "chicks", "medicine", "equipment", "energy", "transport", "other"]).notNull(),
+  category: sqliteEnum("category", ["feed", "chicks", "medicine", "equipment", "energy", "transport", "other"]).notNull(),
   countryCode: varchar("countryCode", { length: 2 }),
   nip: varchar("nip", { length: 32 }),
   email: varchar("email", { length: 255 }),
@@ -616,7 +644,7 @@ export const suppliers = mysqlTable("suppliers", {
   ...base,
 });
 
-export const purchaseOrders = mysqlTable("purchase_orders", {
+export const purchaseOrders = sqliteTable("purchase_orders", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   supplierId: bigint("supplierId", { mode: "number", unsigned: true }).notNull(),
@@ -628,15 +656,15 @@ export const purchaseOrders = mysqlTable("purchase_orders", {
   currency: varchar("currency", { length: 3 }).notNull().default("EUR"),
   orderDate: date("orderDate", { mode: "string" }).notNull(),
   deliveryDate: date("deliveryDate", { mode: "string" }),
-  orderStatus: mysqlEnum("orderStatus", ["draft", "sent", "confirmed", "delivered", "cancelled"]).notNull().default("draft"),
+  orderStatus: sqliteEnum("orderStatus", ["draft", "sent", "confirmed", "delivered", "cancelled"]).notNull().default("draft"),
   ...base,
 });
 
-export const contracts = mysqlTable("contracts", {
+export const contracts = sqliteTable("contracts", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   party: varchar("party", { length: 255 }).notNull(),
-  kind: mysqlEnum("kind", ["purchase", "sale", "service", "lease"]).notNull(),
+  kind: sqliteEnum("kind", ["purchase", "sale", "service", "lease"]).notNull(),
   number: varchar("number", { length: 64 }).notNull(),
   validFrom: date("validFrom", { mode: "string" }).notNull(),
   validTo: date("validTo", { mode: "string" }),
@@ -645,11 +673,11 @@ export const contracts = mysqlTable("contracts", {
   ...base,
 });
 
-export const invoices = mysqlTable("invoices", {
+export const invoices = sqliteTable("invoices", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   number: varchar("number", { length: 64 }).notNull(),
-  kind: mysqlEnum("kind", ["sale", "purchase"]).notNull(),
+  kind: sqliteEnum("kind", ["sale", "purchase"]).notNull(),
   counterparty: varchar("counterparty", { length: 255 }).notNull(),
   issueDate: date("issueDate", { mode: "string" }).notNull(),
   dueDate: date("dueDate", { mode: "string" }),
@@ -661,7 +689,7 @@ export const invoices = mysqlTable("invoices", {
   ...base,
 });
 
-export const medicines = mysqlTable("medicines", {
+export const medicines = sqliteTable("medicines", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -675,22 +703,22 @@ export const medicines = mysqlTable("medicines", {
   ...base,
 });
 
-export const labResults = mysqlTable("lab_results", {
+export const labResults = sqliteTable("lab_results", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
-  sampleType: mysqlEnum("sampleType", ["blood", "swab", "water", "feed", "litter", "carcass"]).notNull(),
+  sampleType: sqliteEnum("sampleType", ["blood", "swab", "water", "feed", "litter", "carcass"]).notNull(),
   testName: varchar("testName", { length: 255 }).notNull(),
   resultValue: varchar("resultValue", { length: 255 }).notNull(),
   unit: varchar("unit", { length: 32 }),
   refRange: varchar("refRange", { length: 64 }),
-  verdict: mysqlEnum("verdict", ["ok", "warning", "critical"]).notNull().default("ok"),
+  verdict: sqliteEnum("verdict", ["ok", "warning", "critical"]).notNull().default("ok"),
   labName: varchar("labName", { length: 255 }),
   day: date("day", { mode: "string" }).notNull(),
   ...base,
 });
 
-export const climateLogs = mysqlTable("climate_logs", {
+export const climateLogs = sqliteTable("climate_logs", {
   id: serial("id").primaryKey(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }).notNull(),
   ts: timestamp("ts").defaultNow().notNull(),
@@ -702,10 +730,10 @@ export const climateLogs = mysqlTable("climate_logs", {
   source: varchar("source", { length: 32 }).notNull().default("sensor"),
 });
 
-export const energyLogs = mysqlTable("energy_logs", {
+export const energyLogs = sqliteTable("energy_logs", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
-  kind: mysqlEnum("kind", ["power", "gas", "water", "fuel"]).notNull(),
+  kind: sqliteEnum("kind", ["power", "gas", "water", "fuel"]).notNull(),
   day: date("day", { mode: "string" }).notNull(),
   consumption: decimal("consumption", { precision: 12, scale: 2 }).notNull(),
   unit: varchar("unit", { length: 16 }).notNull(),
@@ -713,20 +741,20 @@ export const energyLogs = mysqlTable("energy_logs", {
   ...base,
 });
 
-export const maintenanceTickets = mysqlTable("maintenance_tickets", {
+export const maintenanceTickets = sqliteTable("maintenance_tickets", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
   houseId: bigint("houseId", { mode: "number", unsigned: true }),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  priority: mysqlEnum("priority", ["low", "medium", "high", "critical"]).notNull().default("medium"),
-  ticketStatus: mysqlEnum("ticketStatus", ["open", "in_progress", "done", "cancelled"]).notNull().default("open"),
+  priority: sqliteEnum("priority", ["low", "medium", "high", "critical"]).notNull().default("medium"),
+  ticketStatus: sqliteEnum("ticketStatus", ["open", "in_progress", "done", "cancelled"]).notNull().default("open"),
   reportedBy: varchar("reportedBy", { length: 255 }).notNull().default("system"),
   dueDate: date("dueDate", { mode: "string" }),
   ...base,
 });
 
-export const biosecurityChecks = mysqlTable("biosecurity_checks", {
+export const biosecurityChecks = sqliteTable("biosecurity_checks", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -739,11 +767,11 @@ export const biosecurityChecks = mysqlTable("biosecurity_checks", {
   ...base,
 });
 
-export const documents = mysqlTable("documents", {
+export const documents = sqliteTable("documents", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
-  category: mysqlEnum("category", ["vet", "contract", "invoice", "protocol", "certificate", "other"]).notNull().default("other"),
+  category: sqliteEnum("category", ["vet", "contract", "invoice", "protocol", "certificate", "other"]).notNull().default("other"),
   reference: varchar("reference", { length: 128 }),
   docDate: date("docDate", { mode: "string" }).notNull(),
   url: varchar("url", { length: 500 }),
@@ -751,7 +779,7 @@ export const documents = mysqlTable("documents", {
   ...base,
 });
 
-export const tasks = mysqlTable("tasks", {
+export const tasks = sqliteTable("tasks", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }),
@@ -759,12 +787,12 @@ export const tasks = mysqlTable("tasks", {
   description: text("description"),
   assignee: varchar("assignee", { length: 255 }),
   dueDate: date("dueDate", { mode: "string" }),
-  priority: mysqlEnum("priority", ["low", "medium", "high"]).notNull().default("medium"),
+  priority: sqliteEnum("priority", ["low", "medium", "high"]).notNull().default("medium"),
   done: boolean("done").notNull().default(false),
   ...base,
 });
 
-export const messages = mysqlTable("messages", {
+export const messages = sqliteTable("messages", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   author: varchar("author", { length: 255 }).notNull().default("system"),
@@ -773,10 +801,10 @@ export const messages = mysqlTable("messages", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const notifications = mysqlTable("notifications", {
+export const notifications = sqliteTable("notifications", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
-  severity: mysqlEnum("severity", ["info", "warning", "critical"]).notNull().default("info"),
+  severity: sqliteEnum("severity", ["info", "warning", "critical"]).notNull().default("info"),
   title: varchar("title", { length: 255 }).notNull(),
   body: varchar("body", { length: 500 }),
   link: varchar("link", { length: 255 }),
@@ -784,7 +812,7 @@ export const notifications = mysqlTable("notifications", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const hatcheryBatches = mysqlTable("hatchery_batches", {
+export const hatcheryBatches = sqliteTable("hatchery_batches", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   geneticLineId: bigint("geneticLineId", { mode: "number", unsigned: true }).notNull(),
@@ -849,20 +877,20 @@ export type HatcheryBatch = typeof hatcheryBatches.$inferSelect;
    generyczny rejestr encji (odpowiednik /v1/entities)
    ============================================================ */
 
-export const diseases = mysqlTable("diseases", {
+export const diseases = sqliteTable("diseases", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   latinName: varchar("latinName", { length: 255 }),
-  category: mysqlEnum("category", ["viral", "bacterial", "parasitic", "metabolic", "fungal", "other"]).notNull(),
+  category: sqliteEnum("category", ["viral", "bacterial", "parasitic", "metabolic", "fungal", "other"]).notNull(),
   symptoms: text("symptoms"),
   diagnosis: text("diagnosis"),
   treatmentProtocol: text("treatmentProtocol"),
   prevention: text("prevention"),
-  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).notNull().default("medium"),
+  severity: sqliteEnum("severity", ["low", "medium", "high", "critical"]).notNull().default("medium"),
   ...base,
 });
 
-export const necropsy = mysqlTable("necropsy", {
+export const necropsy = sqliteTable("necropsy", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   day: date("day", { mode: "string" }).notNull(),
@@ -874,7 +902,7 @@ export const necropsy = mysqlTable("necropsy", {
   ...base,
 });
 
-export const withdrawalPeriods = mysqlTable("withdrawal_periods", {
+export const withdrawalPeriods = sqliteTable("withdrawal_periods", {
   id: serial("id").primaryKey(),
   treatmentId: bigint("treatmentId", { mode: "number", unsigned: true }).notNull(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
@@ -886,7 +914,7 @@ export const withdrawalPeriods = mysqlTable("withdrawal_periods", {
 });
 
 /* --- magazyn: partie (loty) z traceability FIFO/FEFO --- */
-export const warehouseLots = mysqlTable("warehouse_lots", {
+export const warehouseLots = sqliteTable("warehouse_lots", {
   id: serial("id").primaryKey(),
   warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(),
   product: varchar("product", { length: 255 }).notNull(),
@@ -899,10 +927,10 @@ export const warehouseLots = mysqlTable("warehouse_lots", {
   ...base,
 });
 
-export const stockMovements = mysqlTable("stock_movements", {
+export const stockMovements = sqliteTable("stock_movements", {
   id: serial("id").primaryKey(),
   lotId: bigint("lotId", { mode: "number", unsigned: true }).notNull(),
-  kind: mysqlEnum("kind", ["in", "out", "transfer", "adjust"]).notNull(),
+  kind: sqliteEnum("kind", ["in", "out", "transfer", "adjust"]).notNull(),
   qty: decimal("qty", { precision: 12, scale: 2 }).notNull(),
   reference: varchar("reference", { length: 128 }),
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
@@ -911,7 +939,7 @@ export const stockMovements = mysqlTable("stock_movements", {
 });
 
 /* --- ekonomia: scenariusze i benchmarki --- */
-export const scenarios = mysqlTable("scenarios", {
+export const scenarios = sqliteTable("scenarios", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(),
@@ -920,7 +948,7 @@ export const scenarios = mysqlTable("scenarios", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const benchmarks = mysqlTable("benchmarks", {
+export const benchmarks = sqliteTable("benchmarks", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }),
   metric: varchar("metric", { length: 64 }).notNull(),
@@ -931,7 +959,7 @@ export const benchmarks = mysqlTable("benchmarks", {
 });
 
 /* --- żywienie: historia zmian receptur i dokładność prognoz --- */
-export const recipeHistory = mysqlTable("recipe_history", {
+export const recipeHistory = sqliteTable("recipe_history", {
   id: serial("id").primaryKey(),
   recipeId: bigint("recipeId", { mode: "number", unsigned: true }).notNull(),
   changeNote: varchar("changeNote", { length: 500 }).notNull(),
@@ -942,7 +970,7 @@ export const recipeHistory = mysqlTable("recipe_history", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const forecastAccuracy = mysqlTable("forecast_accuracy", {
+export const forecastAccuracy = sqliteTable("forecast_accuracy", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(),
   metric: varchar("metric", { length: 64 }).notNull(),
@@ -954,18 +982,18 @@ export const forecastAccuracy = mysqlTable("forecast_accuracy", {
 });
 
 /* --- integracje między modułami (sourceModule -> targetModule) --- */
-export const integrations = mysqlTable("integrations", {
+export const integrations = sqliteTable("integrations", {
   id: serial("id").primaryKey(),
   sourceModule: varchar("sourceModule", { length: 64 }).notNull(),
   targetModule: varchar("targetModule", { length: 64 }).notNull(),
-  kind: mysqlEnum("kind", ["api", "webhook", "device", "file"]).notNull().default("api"),
+  kind: sqliteEnum("kind", ["api", "webhook", "device", "file"]).notNull().default("api"),
   config: json("config"),
   enabled: boolean("enabled").notNull().default(true),
   ...base,
 });
 
 /* --- generyczny rejestr encji dynamicznych (odpowiednik /v1/entities/:entity) --- */
-export const dynamicEntities = mysqlTable("dynamic_entities", {
+export const dynamicEntities = sqliteTable("dynamic_entities", {
   id: serial("id").primaryKey(),
   entity: varchar("entity", { length: 64 }).notNull(),
   data: json("data").notNull(),
@@ -979,7 +1007,7 @@ export type WarehouseLot = typeof warehouseLots.$inferSelect;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type Scenario = typeof scenarios.$inferSelect;
 /* --- klucze API do wpinania komputerów/czujników/systemów zewnętrznych (ingest danych) --- */
-export const apiKeys = mysqlTable("api_keys", {
+export const apiKeys = sqliteTable("api_keys", {
   id: serial("id").primaryKey(),
   label: varchar("label", { length: 128 }).notNull(),
   keyHash: varchar("keyHash", { length: 64 }).notNull().unique(), // sha256 klucza — samego klucza nie przechowujemy
@@ -1003,14 +1031,14 @@ export type DynamicEntity = typeof dynamicEntities.$inferSelect;
    ============================================================ */
 
 /* --- Normy żywieniowe per faza wzrostu (FOUNDATION: NutritionalStandard) --- */
-export const nutritionalStandards = mysqlTable("nutritional_standards", {
+export const nutritionalStandards = sqliteTable("nutritional_standards", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(), // np. "Indyk brojler — starter 0–14 dni"
   code: varchar("code", { length: 64 }).notNull(),
-  gender: mysqlEnum("gender", ["toms", "hens", "mixed"]).notNull().default("mixed"),
-  productionType: mysqlEnum("productionType", ["broiler", "breeder"]).notNull().default("broiler"),
-  phase: mysqlEnum("phase", ["starter", "grower", "finisher", "breeder_maintenance"]).notNull(),
+  gender: sqliteEnum("gender", ["toms", "hens", "mixed"]).notNull().default("mixed"),
+  productionType: sqliteEnum("productionType", ["broiler", "breeder"]).notNull().default("broiler"),
+  phase: sqliteEnum("phase", ["starter", "grower", "finisher", "breeder_maintenance"]).notNull(),
   ageFromDays: int("ageFromDays").notNull(),
   ageToDays: int("ageToDays").notNull(),
   targetWeightFromKg: decimal("targetWeightFromKg", { precision: 6, scale: 3 }),
@@ -1037,7 +1065,7 @@ export const nutritionalStandards = mysqlTable("nutritional_standards", {
 export type NutritionalStandard = typeof nutritionalStandards.$inferSelect;
 
 /* --- Partie surowców (FOUNDATION: MaterialBatch) --- */
-export const materialBatches = mysqlTable("material_batches", {
+export const materialBatches = sqliteTable("material_batches", {
   id: serial("id").primaryKey(),
   ingredientId: bigint("ingredientId", { mode: "number", unsigned: true }).notNull(), // → feed_ingredients
   batchNumber: varchar("batchNumber", { length: 64 }).notNull(),
@@ -1054,7 +1082,7 @@ export const materialBatches = mysqlTable("material_batches", {
 export type MaterialBatch = typeof materialBatches.$inferSelect;
 
 /* --- Substytucje surowców (FOUNDATION: RawMaterialSubstitution) --- */
-export const materialSubstitutions = mysqlTable("material_substitutions", {
+export const materialSubstitutions = sqliteTable("material_substitutions", {
   id: serial("id").primaryKey(),
   ingredientId: bigint("ingredientId", { mode: "number", unsigned: true }).notNull(), // surowiec podstawowy
   substituteId: bigint("substituteId", { mode: "number", unsigned: true }).notNull(), // zamiennik → feed_ingredients
@@ -1066,11 +1094,11 @@ export const materialSubstitutions = mysqlTable("material_substitutions", {
 export type MaterialSubstitution = typeof materialSubstitutions.$inferSelect;
 
 /* --- Interakcje między surowcami (FOUNDATION: MaterialInteraction) --- */
-export const materialInteractions = mysqlTable("material_interactions", {
+export const materialInteractions = sqliteTable("material_interactions", {
   id: serial("id").primaryKey(),
   ingredientAId: bigint("ingredientAId", { mode: "number", unsigned: true }).notNull(),
   ingredientBId: bigint("ingredientBId", { mode: "number", unsigned: true }).notNull(),
-  type: mysqlEnum("type", ["synergy", "antagonism", "limit"]).notNull(),
+  type: sqliteEnum("type", ["synergy", "antagonism", "limit"]).notNull(),
   description: text("description").notNull(),
   maxCombinedPct: decimal("maxCombinedPct", { precision: 5, scale: 2 }), // dla type=limit
   ...base,
@@ -1078,10 +1106,10 @@ export const materialInteractions = mysqlTable("material_interactions", {
 export type MaterialInteraction = typeof materialInteractions.$inferSelect;
 
 /* --- Baza wiedzy o surowcach (FOUNDATION: MaterialKnowledgeEntry) --- */
-export const knowledgeEntries = mysqlTable("knowledge_entries", {
+export const knowledgeEntries = sqliteTable("knowledge_entries", {
   id: serial("id").primaryKey(),
   ingredientId: bigint("ingredientId", { mode: "number", unsigned: true }), // null = wpis ogólny
-  type: mysqlEnum("type", ["publication", "manufacturer_guide", "standard", "common_mistake", "research_paper"]).notNull(),
+  type: sqliteEnum("type", ["publication", "manufacturer_guide", "standard", "common_mistake", "research_paper"]).notNull(),
   title: varchar("title", { length: 500 }).notNull(),
   source: varchar("source", { length: 255 }).notNull(), // NRC, CVB, INRA, producent…
   year: int("year"),
@@ -1103,14 +1131,14 @@ export const knowledgeEntries = mysqlTable("knowledge_entries", {
 export type KnowledgeEntry = typeof knowledgeEntries.$inferSelect;
 
 /* --- Eksperymenty recepturowe (FOUNDATION: ExperimentScenario) --- */
-export const experimentScenarios = mysqlTable("experiment_scenarios", {
+export const experimentScenarios = sqliteTable("experiment_scenarios", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   baseRecipeId: bigint("baseRecipeId", { mode: "number", unsigned: true }).notNull(), // → recipes
   changes: json("changes").notNull(), // [{ ingredientId, action: "remove"|"add"|"adjust", value }]
-  experimentStatus: mysqlEnum("experimentStatus", ["draft", "running", "completed", "abandoned"]).notNull().default("draft"),
+  experimentStatus: sqliteEnum("experimentStatus", ["draft", "running", "completed", "abandoned"]).notNull().default("draft"),
   results: json("results"), // wyliczony profil po zmianach + porównanie z bazą
   startedAt: timestamp("startedAt"),
   completedAt: timestamp("completedAt"),
@@ -1119,7 +1147,7 @@ export const experimentScenarios = mysqlTable("experiment_scenarios", {
 export type ExperimentScenario = typeof experimentScenarios.$inferSelect;
 
 /* --- Prognozy zużycia/wyników stada (FOUNDATION: BatchForecast) --- */
-export const batchForecasts = mysqlTable("batch_forecasts", {
+export const batchForecasts = sqliteTable("batch_forecasts", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   weeklyForecasts: json("weeklyForecasts").notNull(), // [{ week, ageDays, weight, feedConsumption, fcr, mortality }]
@@ -1138,12 +1166,12 @@ export const batchForecasts = mysqlTable("batch_forecasts", {
 export type BatchForecast = typeof batchForecasts.$inferSelect;
 
 /* --- Alerty paszowe z cyklem życia (FOUNDATION: FeedAlert) --- */
-export const feedAlerts = mysqlTable("feed_alerts", {
+export const feedAlerts = sqliteTable("feed_alerts", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
-  type: mysqlEnum("type", ["price_spike", "stock_low", "stock_out", "quality_deviation", "standard_violation", "forecast_deviation", "interaction_warning"]).notNull(),
-  severity: mysqlEnum("severity", ["info", "warning", "critical"]).notNull().default("warning"),
-  sourceType: mysqlEnum("sourceType", ["recipe", "ingredient", "batch", "standard"]).notNull(),
+  type: sqliteEnum("type", ["price_spike", "stock_low", "stock_out", "quality_deviation", "standard_violation", "forecast_deviation", "interaction_warning"]).notNull(),
+  severity: sqliteEnum("severity", ["info", "warning", "critical"]).notNull().default("warning"),
+  sourceType: sqliteEnum("sourceType", ["recipe", "ingredient", "batch", "standard"]).notNull(),
   sourceId: bigint("sourceId", { mode: "number", unsigned: true }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message").notNull(),
@@ -1153,7 +1181,7 @@ export const feedAlerts = mysqlTable("feed_alerts", {
   unit: varchar("unit", { length: 32 }),
   consequences: json("consequences"), // string[]
   recommendations: json("recommendations"), // string[]
-  alertStatus: mysqlEnum("alertStatus", ["active", "acknowledged", "resolved"]).notNull().default("active"),
+  alertStatus: sqliteEnum("alertStatus", ["active", "acknowledged", "resolved"]).notNull().default("active"),
   acknowledgedBy: varchar("acknowledgedBy", { length: 255 }),
   acknowledgedAt: timestamp("acknowledgedAt"),
   resolvedAt: timestamp("resolvedAt"),
@@ -1167,7 +1195,7 @@ export type FeedAlert = typeof feedAlerts.$inferSelect;
    ============================================================ */
 
 /* --- Programy szczepień (FOUNDATION: VaccinationProgram) --- */
-export const vaccinationPrograms = mysqlTable("vaccination_programs", {
+export const vaccinationPrograms = sqliteTable("vaccination_programs", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   name: varchar("name", { length: 255 }).notNull(),
@@ -1179,12 +1207,12 @@ export const vaccinationPrograms = mysqlTable("vaccination_programs", {
 export type VaccinationProgram = typeof vaccinationPrograms.$inferSelect;
 
 /* --- Kroki programu szczepień (FOUNDATION: VaccinationStep) --- */
-export const vaccinationProgramSteps = mysqlTable("vaccination_program_steps", {
+export const vaccinationProgramSteps = sqliteTable("vaccination_program_steps", {
   id: serial("id").primaryKey(),
   programId: bigint("programId", { mode: "number", unsigned: true }).notNull(), // → vaccination_programs
   vaccineName: varchar("vaccineName", { length: 255 }).notNull(),
   ageDays: int("ageDays").notNull(), // dzień życia stada
-  route: mysqlEnum("route", ["drinking_water", "spray", "injection_im", "injection_sc", "eye_drop", "wing_web"]).notNull(),
+  route: sqliteEnum("route", ["drinking_water", "spray", "injection_im", "injection_sc", "eye_drop", "wing_web"]).notNull(),
   dosePerBird: varchar("dosePerBird", { length: 64 }),
   notes: text("notes"),
   ...base,
@@ -1192,10 +1220,10 @@ export const vaccinationProgramSteps = mysqlTable("vaccination_program_steps", {
 export type VaccinationProgramStep = typeof vaccinationProgramSteps.$inferSelect;
 
 /* --- Zdrowotne rekordy zbiorcze (FOUNDATION: HealthRecord) --- */
-export const healthRecords = mysqlTable("health_records", {
+export const healthRecords = sqliteTable("health_records", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches (FOUNDATION: flockId)
-  type: mysqlEnum("type", ["vaccination", "treatment", "supplement", "necropsy", "inspection"]).notNull(),
+  type: sqliteEnum("type", ["vaccination", "treatment", "supplement", "necropsy", "inspection"]).notNull(),
   day: date("day", { mode: "string" }).notNull(),
   description: text("description").notNull(),
   performedBy: varchar("performedBy", { length: 255 }).notNull(),
@@ -1206,10 +1234,10 @@ export const healthRecords = mysqlTable("health_records", {
 export type HealthRecord = typeof healthRecords.$inferSelect;
 
 /* --- Pliki przy rekordach zdrowia (FOUNDATION: HealthImage + HealthDocument) --- */
-export const healthRecordFiles = mysqlTable("health_record_files", {
+export const healthRecordFiles = sqliteTable("health_record_files", {
   id: serial("id").primaryKey(),
   healthRecordId: bigint("healthRecordId", { mode: "number", unsigned: true }).notNull(), // → health_records
-  kind: mysqlEnum("kind", ["image", "document"]).notNull(),
+  kind: sqliteEnum("kind", ["image", "document"]).notNull(),
   fileName: varchar("fileName", { length: 255 }).notNull(),
   filePath: varchar("filePath", { length: 1000 }).notNull(),
   mimeType: varchar("mimeType", { length: 128 }),
@@ -1219,7 +1247,7 @@ export const healthRecordFiles = mysqlTable("health_record_files", {
 export type HealthRecordFile = typeof healthRecordFiles.$inferSelect;
 
 /* --- Referencje naukowe chorób (FOUNDATION: DiseaseReference) --- */
-export const diseaseReferences = mysqlTable("disease_references", {
+export const diseaseReferences = sqliteTable("disease_references", {
   id: serial("id").primaryKey(),
   diseaseId: bigint("diseaseId", { mode: "number", unsigned: true }).notNull(), // → diseases
   title: varchar("title", { length: 500 }).notNull(),
@@ -1232,7 +1260,7 @@ export const diseaseReferences = mysqlTable("disease_references", {
 export type DiseaseReference = typeof diseaseReferences.$inferSelect;
 
 /* --- Wyniki oceny ryzyka stada (FOUNDATION: RiskScore) --- */
-export const riskScores = mysqlTable("risk_scores", {
+export const riskScores = sqliteTable("risk_scores", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches (FOUNDATION: flockId)
   calculatedAt: timestamp("calculatedAt").defaultNow().notNull(),
@@ -1246,7 +1274,7 @@ export const riskScores = mysqlTable("risk_scores", {
 export type RiskScore = typeof riskScores.$inferSelect;
 
 /* --- Logi doradcy AI zdrowia (FOUNDATION: AIAdvisorLog) --- */
-export const aiAdvisorLogs = mysqlTable("ai_advisor_logs", {
+export const aiAdvisorLogs = sqliteTable("ai_advisor_logs", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   symptoms: json("symptoms").notNull(), // string[]
@@ -1260,7 +1288,7 @@ export const aiAdvisorLogs = mysqlTable("ai_advisor_logs", {
 export type AiAdvisorLog = typeof aiAdvisorLogs.$inferSelect;
 
 /* --- Dzienne metryki zdrowotno-produkcyjne stada (FOUNDATION: DailyMetric) --- */
-export const healthDailyMetrics = mysqlTable("health_daily_metrics", {
+export const healthDailyMetrics = sqliteTable("health_daily_metrics", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   day: date("day", { mode: "string" }).notNull(),
@@ -1280,7 +1308,7 @@ export type HealthDailyMetric = typeof healthDailyMetrics.$inferSelect;
    ============================================================ */
 
 /* --- Analiza AI dnia produkcji (FOUNDATION: AIAnalysis) --- */
-export const productionAnalyses = mysqlTable("production_analyses", {
+export const productionAnalyses = sqliteTable("production_analyses", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   dayNumber: int("dayNumber").notNull(),
@@ -1295,7 +1323,7 @@ export const productionAnalyses = mysqlTable("production_analyses", {
   co2Score: decimal("co2Score", { precision: 5, scale: 1 }),
   nh3Score: decimal("nh3Score", { precision: 5, scale: 1 }),
   dayScore: decimal("dayScore", { precision: 5, scale: 1 }).notNull(), // 0–100
-  riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high", "critical"]).notNull(),
+  riskLevel: sqliteEnum("riskLevel", ["low", "medium", "high", "critical"]).notNull(),
   detectedIssues: json("detectedIssues"), // {type,severity,description}[]
   possibleCauses: json("possibleCauses"), // string[]
   recommendations: json("recommendations"), // string[]
@@ -1305,7 +1333,7 @@ export const productionAnalyses = mysqlTable("production_analyses", {
 export type ProductionAnalysis = typeof productionAnalyses.$inferSelect;
 
 /* --- Prognoza końca rzutu (FOUNDATION: AIForecast) --- */
-export const productionForecasts = mysqlTable("production_forecasts", {
+export const productionForecasts = sqliteTable("production_forecasts", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   predictedFinalWeight: decimal("predictedFinalWeight", { precision: 8, scale: 1 }).notNull(), // g
@@ -1322,15 +1350,15 @@ export const productionForecasts = mysqlTable("production_forecasts", {
 export type ProductionForecast = typeof productionForecasts.$inferSelect;
 
 /* --- Alerty produkcyjne AI (FOUNDATION: Alert) --- */
-export const productionAlerts = mysqlTable("production_alerts", {
+export const productionAlerts = sqliteTable("production_alerts", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
-  type: mysqlEnum("type", [
+  type: sqliteEnum("type", [
     "fcr_deterioration", "feed_drop", "water_spike", "mortality_rise",
     "environmental", "nutritional", "health", "temperature_anomaly",
     "humidity_anomaly", "co2_high", "nh3_high",
   ]).notNull(),
-  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).notNull(),
+  severity: sqliteEnum("severity", ["low", "medium", "high", "critical"]).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description").notNull(),
   justification: text("justification").notNull(), // uzasadnienie AI
@@ -1342,10 +1370,10 @@ export const productionAlerts = mysqlTable("production_alerts", {
 export type ProductionAlert = typeof productionAlerts.$inferSelect;
 
 /* --- Zdarzenia produkcyjne / oś czasu rzutu (FOUNDATION: ProductionEvent) --- */
-export const productionEvents = mysqlTable("production_events", {
+export const productionEvents = sqliteTable("production_events", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
-  eventType: mysqlEnum("eventType", [
+  eventType: sqliteEnum("eventType", [
     "chick_receipt", "weighing", "feed_change", "vaccination", "treatment",
     "breakdown", "alert", "temp_change", "transfer", "sale", "cleaning",
     "inspection", "daily_log",
@@ -1365,12 +1393,12 @@ export type ProductionEvent = typeof productionEvents.$inferSelect;
    ============================================================ */
 
 /* --- Katalog produktów magazynowych (FOUNDATION: Product) --- */
-export const warehouseProducts = mysqlTable("warehouse_products", {
+export const warehouseProducts = sqliteTable("warehouse_products", {
   id: serial("id").primaryKey(),
   sku: varchar("sku", { length: 64 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  category: mysqlEnum("category", [
+  category: sqliteEnum("category", [
     "feed_raw", "feed_ready", "premix", "concentrate", "oil", "vitamin",
     "amino_acid", "mineral", "medication", "vaccine", "disinfectant",
     "bedding", "gas", "pellet", "consumable", "spare_part", "fuel",
@@ -1396,7 +1424,7 @@ export const warehouseProducts = mysqlTable("warehouse_products", {
 export type WarehouseProduct = typeof warehouseProducts.$inferSelect;
 
 /* --- Rozszerzenie partii: jakość + kwarantanna + koszty (FOUNDATION: Lot extra) --- */
-export const warehouseLotDetails = mysqlTable("warehouse_lot_details", {
+export const warehouseLotDetails = sqliteTable("warehouse_lot_details", {
   id: serial("id").primaryKey(),
   lotId: bigint("lotId", { mode: "number", unsigned: true }).notNull().unique(), // → warehouse_lots
   manufacturer: varchar("manufacturer", { length: 255 }),
@@ -1426,7 +1454,7 @@ export const warehouseLotDetails = mysqlTable("warehouse_lot_details", {
 export type WarehouseLotDetail = typeof warehouseLotDetails.$inferSelect;
 
 /* --- Snapshot stanu magazynowego (FOUNDATION: StockItem) --- */
-export const warehouseStockItems = mysqlTable("warehouse_stock_items", {
+export const warehouseStockItems = sqliteTable("warehouse_stock_items", {
   id: serial("id").primaryKey(),
   productId: bigint("productId", { mode: "number", unsigned: true }).notNull(), // → warehouse_products
   warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }).notNull(), // → warehouses
@@ -1443,14 +1471,14 @@ export const warehouseStockItems = mysqlTable("warehouse_stock_items", {
 export type WarehouseStockItem = typeof warehouseStockItems.$inferSelect;
 
 /* --- Bogaty dziennik ruchów magazynowych (FOUNDATION: StockMovement) --- */
-export const warehouseMovements = mysqlTable("warehouse_movements", {
+export const warehouseMovements = sqliteTable("warehouse_movements", {
   id: serial("id").primaryKey(),
   lotId: bigint("lotId", { mode: "number", unsigned: true }), // → warehouse_lots
   productId: bigint("productId", { mode: "number", unsigned: true }).notNull(),
-  type: mysqlEnum("type", [
+  type: sqliteEnum("type", [
     "receipt", "issue", "transfer", "adjustment", "consumption", "return", "production",
   ]).notNull(),
-  subtype: mysqlEnum("subtype", [
+  subtype: sqliteEnum("subtype", [
     "pz", "import", "own_prod", "return_in", "transfer_in", "brooder_in", "mixer_in",
     "rw", "wz", "consume_feed", "consume_med", "consume_bed", "consume_gas",
     "service", "sale", "disposal", "adjust",
@@ -1482,7 +1510,7 @@ export const warehouseMovements = mysqlTable("warehouse_movements", {
 export type WarehouseMovement = typeof warehouseMovements.$inferSelect;
 
 /* --- Analiza AI zapasów (FOUNDATION: WarehouseAIAnalysis) --- */
-export const warehouseAiAnalyses = mysqlTable("warehouse_ai_analyses", {
+export const warehouseAiAnalyses = sqliteTable("warehouse_ai_analyses", {
   id: serial("id").primaryKey(),
   productId: bigint("productId", { mode: "number", unsigned: true }).notNull(),
   warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }),
@@ -1501,12 +1529,12 @@ export const warehouseAiAnalyses = mysqlTable("warehouse_ai_analyses", {
 export type WarehouseAiAnalysis = typeof warehouseAiAnalyses.$inferSelect;
 
 /* --- Alerty magazynowe (FOUNDATION: WarehouseAlert) --- */
-export const warehouseAlerts = mysqlTable("warehouse_alerts", {
+export const warehouseAlerts = sqliteTable("warehouse_alerts", {
   id: serial("id").primaryKey(),
-  type: mysqlEnum("type", [
+  type: sqliteEnum("type", [
     "low_stock", "expiring_soon", "expired", "feed_shortage", "overstock", "quarantine",
   ]).notNull(),
-  severity: mysqlEnum("severity", ["info", "warning", "critical", "emergency"]).notNull(),
+  severity: sqliteEnum("severity", ["info", "warning", "critical", "emergency"]).notNull(),
   productId: bigint("productId", { mode: "number", unsigned: true }),
   lotId: bigint("lotId", { mode: "number", unsigned: true }),
   warehouseId: bigint("warehouseId", { mode: "number", unsigned: true }),
@@ -1527,7 +1555,7 @@ export type WarehouseAlert = typeof warehouseAlerts.$inferSelect;
    ============================================================ */
 
 /* --- Wyniki analiz "co jeśli" (FOUNDATION: ScenarioResult) --- */
-export const scenarioResults = mysqlTable("scenario_results", {
+export const scenarioResults = sqliteTable("scenario_results", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   name: varchar("name", { length: 255 }).notNull(),
@@ -1552,14 +1580,14 @@ export const scenarioResults = mysqlTable("scenario_results", {
 export type ScenarioResult = typeof scenarioResults.$inferSelect;
 
 /* --- Rekomendacje doradcy kosztów AI (FOUNDATION: AIAdvisor) --- */
-export const economicsAiAdvisors = mysqlTable("economics_ai_advisors", {
+export const economicsAiAdvisors = sqliteTable("economics_ai_advisors", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
   date: timestamp("date").defaultNow().notNull(),
-  category: mysqlEnum("category", [
+  category: sqliteEnum("category", [
     "feed", "energy", "health", "labor", "transport", "timing", "recipe", "general",
   ]).notNull(),
-  priority: mysqlEnum("priority", ["critical", "high", "medium", "low"]).notNull(),
+  priority: sqliteEnum("priority", ["critical", "high", "medium", "low"]).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description").notNull(),
   justification: text("justification").notNull(),
@@ -1572,10 +1600,10 @@ export const economicsAiAdvisors = mysqlTable("economics_ai_advisors", {
 export type EconomicsAiAdvisor = typeof economicsAiAdvisors.$inferSelect;
 
 /* --- Podsumowanie zarządcze rzutu (FOUNDATION: ExecutiveSummary) --- */
-export const executiveSummaries = mysqlTable("executive_summaries", {
+export const executiveSummaries = sqliteTable("executive_summaries", {
   id: serial("id").primaryKey(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
-  period: mysqlEnum("period", ["daily", "weekly", "monthly", "batch"]).notNull().default("batch"),
+  period: sqliteEnum("period", ["daily", "weekly", "monthly", "batch"]).notNull().default("batch"),
   strengths: json("strengths").notNull(), // string[]
   threats: json("threats").notNull(), // string[]
   topCosts: json("topCosts").notNull(), // {category, amount, percent}[]
@@ -1588,7 +1616,7 @@ export const executiveSummaries = mysqlTable("executive_summaries", {
 export type ExecutiveSummary = typeof executiveSummaries.$inferSelect;
 
 /* --- Wpisy benchmarkowe per rzut (FOUNDATION: BenchmarkEntry) --- */
-export const benchmarkEntries = mysqlTable("benchmark_entries", {
+export const benchmarkEntries = sqliteTable("benchmark_entries", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(), // → farms
   batchId: bigint("batchId", { mode: "number", unsigned: true }).notNull(), // → batches
@@ -1616,11 +1644,11 @@ export type BenchmarkEntry = typeof benchmarkEntries.$inferSelect;
    ============================================================ */
 
 /* --- Typy urządzeń IoT (FOUNDATION: DeviceType) --- */
-export const iotDeviceTypes = mysqlTable("iot_device_types", {
+export const iotDeviceTypes = sqliteTable("iot_device_types", {
   id: serial("id").primaryKey(),
   code: varchar("code", { length: 64 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  category: mysqlEnum("category", [
+  category: sqliteEnum("category", [
     "climate_controller", "temperature_sensor", "humidity_sensor", "co2_sensor",
     "nh3_sensor", "h2s_sensor", "airflow_sensor", "energy_meter", "gas_meter",
     "water_meter", "feed_scale", "feed_silo_level", "feed_auto", "drinker",
@@ -1637,7 +1665,7 @@ export const iotDeviceTypes = mysqlTable("iot_device_types", {
 export type IotDeviceType = typeof iotDeviceTypes.$inferSelect;
 
 /* --- Urządzenia IoT (FOUNDATION: Device) --- */
-export const iotDevices = mysqlTable("iot_devices", {
+export const iotDevices = sqliteTable("iot_devices", {
   id: serial("id").primaryKey(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(), // → farms
   houseId: bigint("houseId", { mode: "number", unsigned: true }), // → houses (FOUNDATION buildingId)
@@ -1655,7 +1683,7 @@ export const iotDevices = mysqlTable("iot_devices", {
   positionY: decimal("positionY", { precision: 8, scale: 2 }),
   config: json("config"),
   calibration: json("calibration"),
-  status: mysqlEnum("status", [
+  status: sqliteEnum("status", [
     "online", "offline", "warning", "error", "maintenance", "calibrating",
   ]).notNull().default("offline"),
   lastSeenAt: timestamp("lastSeenAt"),
@@ -1670,7 +1698,7 @@ export const iotDevices = mysqlTable("iot_devices", {
 export type IotDevice = typeof iotDevices.$inferSelect;
 
 /* --- Telemetria urządzeń (FOUNDATION: Telemetry) --- */
-export const iotTelemetry = mysqlTable("iot_telemetry", {
+export const iotTelemetry = sqliteTable("iot_telemetry", {
   id: serial("id").primaryKey(),
   deviceId: bigint("deviceId", { mode: "number", unsigned: true }).notNull(), // → iot_devices
   ts: timestamp("ts").defaultNow().notNull(),
@@ -1678,7 +1706,7 @@ export const iotTelemetry = mysqlTable("iot_telemetry", {
   rawValue: json("rawValue").notNull(),
   processedValue: decimal("processedValue", { precision: 14, scale: 4 }),
   unit: varchar("unit", { length: 16 }),
-  quality: mysqlEnum("quality", [
+  quality: sqliteEnum("quality", [
     "good", "bad", "uncertain", "sensor_error", "calibration_error",
   ]).notNull().default("good"),
   metadata: json("metadata"),
@@ -1686,12 +1714,12 @@ export const iotTelemetry = mysqlTable("iot_telemetry", {
 export type IotTelemetry = typeof iotTelemetry.$inferSelect;
 
 /* --- Predykcje AI nad telemetrią/klimatem (FOUNDATION: AIPrediction) --- */
-export const iotAiPredictions = mysqlTable("iot_ai_predictions", {
+export const iotAiPredictions = sqliteTable("iot_ai_predictions", {
   id: serial("id").primaryKey(),
   deviceId: bigint("deviceId", { mode: "number", unsigned: true }), // → iot_devices
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(), // → farms
   houseId: bigint("houseId", { mode: "number", unsigned: true }), // → houses
-  type: mysqlEnum("type", [
+  type: sqliteEnum("type", [
     "anomaly_detection", "device_failure", "feed_shortage",
     "climate_fcr_impact", "climate_mortality_impact", "climate_adg_impact",
   ]).notNull(),
@@ -1710,7 +1738,7 @@ export type IotAiPrediction = typeof iotAiPredictions.$inferSelect;
    idempotentną projekcją ich stanu na koniec dnia.
    ============================================================ */
 
-export const batchDayFacts = mysqlTable("batch_day_facts", {
+export const batchDayFacts = sqliteTable("batch_day_facts", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   farmId: bigint("farmId", { mode: "number", unsigned: true }).notNull(),
@@ -1742,7 +1770,7 @@ export const batchDayFacts = mysqlTable("batch_day_facts", {
   index("batch_day_facts_house_day_idx").on(table.houseId, table.day),
 ]);
 
-export const predictionRules = mysqlTable("prediction_rules", {
+export const predictionRules = sqliteTable("prediction_rules", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   code: varchar("code", { length: 64 }).notNull(),
@@ -1755,7 +1783,7 @@ export const predictionRules = mysqlTable("prediction_rules", {
   author: varchar("author", { length: 255 }).notNull(),
   effectiveFrom: date("effectiveFrom", { mode: "string" }).notNull(),
   effectiveTo: date("effectiveTo", { mode: "string" }),
-  status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+  status: sqliteEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
@@ -1763,12 +1791,12 @@ export const predictionRules = mysqlTable("prediction_rules", {
   index("prediction_rules_status_effective_idx").on(table.status, table.effectiveFrom),
 ]);
 
-export const referenceCurves = mysqlTable("reference_curves", {
+export const referenceCurves = sqliteTable("reference_curves", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }),
   geneticLineId: bigint("geneticLineId", { mode: "number", unsigned: true }),
   geneticLine: varchar("geneticLine", { length: 128 }),
-  sex: mysqlEnum("sex", ["toms", "hens", "mixed"]).notNull(),
+  sex: sqliteEnum("sex", ["toms", "hens", "mixed"]).notNull(),
   ageDays: int("ageDays").notNull(),
   targetWeightG: int("targetWeightG"),
   targetAdgG: decimal("targetAdgG", { precision: 9, scale: 3 }),
@@ -1786,7 +1814,7 @@ export const referenceCurves = mysqlTable("reference_curves", {
   author: varchar("author", { length: 255 }).notNull(),
   effectiveFrom: date("effectiveFrom", { mode: "string" }).notNull(),
   effectiveTo: date("effectiveTo", { mode: "string" }),
-  status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+  status: sqliteEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
@@ -1794,7 +1822,7 @@ export const referenceCurves = mysqlTable("reference_curves", {
   index("reference_curves_lookup_idx").on(table.status, table.sex, table.ageDays, table.effectiveFrom),
 ]);
 
-export const predictionRuns = mysqlTable("prediction_runs", {
+export const predictionRuns = sqliteTable("prediction_runs", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
@@ -1807,7 +1835,7 @@ export const predictionRuns = mysqlTable("prediction_runs", {
   inputSnapshot: json("inputSnapshot").notNull(),
   output: json("output").notNull(),
   confidence: decimal("confidence", { precision: 5, scale: 4 }).notNull(),
-  status: mysqlEnum("status", ["completed", "invalid", "superseded"]).notNull().default("completed"),
+  status: sqliteEnum("status", ["completed", "invalid", "superseded"]).notNull().default("completed"),
   sourceWatermark: timestamp("sourceWatermark").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [
@@ -1815,17 +1843,17 @@ export const predictionRuns = mysqlTable("prediction_runs", {
   index("prediction_runs_rule_created_idx").on(table.ruleId, table.createdAt),
 ]);
 
-export const predictionFindings = mysqlTable("prediction_findings", {
+export const predictionFindings = sqliteTable("prediction_findings", {
   id: serial("id").primaryKey(),
   predictionRunId: bigint("predictionRunId", { mode: "number", unsigned: true }).notNull(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   batchId: bigint("batchId", { mode: "number", unsigned: true }),
   type: varchar("type", { length: 64 }).notNull(),
-  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).notNull(),
+  severity: sqliteEnum("severity", ["low", "medium", "high", "critical"]).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description").notNull(),
   recommendation: text("recommendation"),
-  status: mysqlEnum("status", ["open", "acknowledged", "resolved"]).notNull().default("open"),
+  status: sqliteEnum("status", ["open", "acknowledged", "resolved"]).notNull().default("open"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   resolvedAt: timestamp("resolvedAt"),
   resolvedBy: bigint("resolvedBy", { mode: "number", unsigned: true }),
@@ -1834,13 +1862,13 @@ export const predictionFindings = mysqlTable("prediction_findings", {
   index("prediction_findings_run_idx").on(table.predictionRunId),
 ]);
 
-export const measurementQualityFlags = mysqlTable("measurement_quality_flags", {
+export const measurementQualityFlags = sqliteTable("measurement_quality_flags", {
   id: serial("id").primaryKey(),
   companyId: bigint("companyId", { mode: "number", unsigned: true }).notNull(),
   sourceTable: varchar("sourceTable", { length: 64 }).notNull(),
   sourceId: bigint("sourceId", { mode: "number", unsigned: true }).notNull(),
   metric: varchar("metric", { length: 64 }).notNull(),
-  quality: mysqlEnum("quality", ["accepted", "rejected", "suspect"]).notNull(),
+  quality: sqliteEnum("quality", ["accepted", "rejected", "suspect"]).notNull(),
   reason: varchar("reason", { length: 500 }).notNull(),
   flaggedBy: bigint("flaggedBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

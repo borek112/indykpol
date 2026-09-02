@@ -57,7 +57,7 @@ export async function registerLocalUser(input: {
     const companyId = (await tx.insert(schema.companies).values({
       name: input.companyName.trim(),
       countryCode: input.countryCode.trim().toUpperCase(),
-    }).$returningId())[0].id;
+    }).returning({ id: schema.companies.id }))[0].id;
     const [{ id: userId }] = await tx.insert(schema.users).values({
       unionId: localIdentity(email),
       email,
@@ -65,7 +65,7 @@ export async function registerLocalUser(input: {
       passwordHash: await hashPassword(input.password),
       role: "admin",
       companyId,
-    }).$returningId();
+    }).returning({ id: schema.users.id });
     const [user] = await tx.select().from(schema.users).where(eq(schema.users.id, userId));
     if (!user) throw new Error("Created user could not be loaded.");
     return user;

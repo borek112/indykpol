@@ -76,7 +76,7 @@ async function main() {
         qty: String(qty), unit: p.includes("Witamina") || p.includes("Amoksycylina") ? "l" : "kg",
         receivedDate: received, expiryDate: expiry,
         supplierId: suppliers.length ? pick(suppliers).id : null,
-      }).$returningId();
+      }).returning({ id: s.diseases.id });
       await db.insert(s.stockMovements).values({ lotId: id, kind: "in", qty: String(qty), reference: "przyjęcie partii", day: received });
       if (Math.random() > 0.5) {
         const out = Math.round(qty * 0.3);
