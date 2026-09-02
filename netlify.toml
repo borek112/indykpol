@@ -1,16 +1,23 @@
-# Netlify configuration for the monorepo root.
-# The deployable frontend lives in ./app.
-
 [build]
   base = "app"
-  command = "npm install --legacy-peer-deps && npx vite build"
+  command = "npm install && npm run build && npm run seed:demo"
   publish = "dist/public"
+  functions = "netlify/functions"
 
 [[redirects]]
-  from = "/api/*"
-  to = "https://indykpol-production.up.railway.app/api/:splat"
+  from = "/.netlify/functions/trpc/*"
+  to = "/.netlify/functions/trpc/:splat"
   status = 200
-  force = true
+
+[[redirects]]
+  from = "/api/trpc/*"
+  to = "/.netlify/functions/trpc/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/demo-login"
+  to = "/.netlify/functions/demo-login"
+  status = 302
 
 [[redirects]]
   from = "/*"
