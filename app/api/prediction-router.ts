@@ -39,7 +39,7 @@ export const predictionRouter = createRouter({
   })).mutation(async ({ input, ctx }) => {
     const [{ id }] = await getDb().insert(s.predictionRules).values({
       ...input, companyId: ctx.user!.companyId!, author: ctx.user!.id.toString(), status: "draft",
-    }).$returningId();
+    }).returning({ id: s.predictionRules.id });
     return { id };
   }),
   createReferenceCurve: adminQuery.input(z.object({
@@ -53,7 +53,7 @@ export const predictionRouter = createRouter({
       ...input, companyId: ctx.user!.companyId!, author: ctx.user!.id.toString(), status: "draft",
       targetAdgG: input.targetAdgG?.toFixed(3), targetFcr: input.targetFcr?.toFixed(4),
       targetFeedKg: input.targetFeedKg?.toFixed(3), targetMortalityPct: input.targetMortalityPct?.toFixed(4),
-    }).$returningId();
+    }).returning({ id: s.referenceCurves.id });
     return { id };
   }),
 });

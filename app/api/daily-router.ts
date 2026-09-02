@@ -181,7 +181,7 @@ export const feedProgramRouter = createRouter({
       const db = getDb();
       for (const stage of input.stages) if (stage.recipeId) await requireRecipeTenant(ctx.user!, stage.recipeId);
       const [{ id }] = await db.insert(s.feedPrograms)
-        .values({ companyId, name: input.name, sex: input.sex }).$returningId();
+        .values({ companyId, name: input.name, sex: input.sex }).returning({ id: s.dailyLogs.id });
       for (const st of input.stages) {
         await db.insert(s.feedProgramStages).values({
           programId: id, name: st.name, dayFrom: st.dayFrom, dayTo: st.dayTo,

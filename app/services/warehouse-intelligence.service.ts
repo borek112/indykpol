@@ -45,7 +45,7 @@ export async function createProduct(input: WarehouseProductCreate) {
     fcrImpact: input.fcrImpact?.toFixed(2), adgImpact: input.adgImpact?.toFixed(1),
     healthImpact: input.healthImpact, bestPractices: input.bestPractices,
     dosageInfo: input.dosageInfo,
-  }).$returningId();
+  }).returning({ id: s.warehouseProducts.id });
   return { id };
 }
 
@@ -87,7 +87,7 @@ export async function upsertLotDetails(input: LotDetailsUpsert) {
     return { id: existing.id, updated: true };
   }
   const [{ id }] = await db.insert(s.warehouseLotDetails)
-    .values({ lotId: input.lotId, ...values }).$returningId();
+    .values({ lotId: input.lotId, ...values }).returning({ id: s.warehouseLotDetails.id });
   return { id, updated: false };
 }
 
@@ -148,7 +148,7 @@ export async function createStockMovement(input: WarehouseMovementCreate, user: 
       moistureAtMove: input.moistureAtMove?.toFixed(2),
       temperatureAtMove: input.temperatureAtMove?.toFixed(1),
       performedBy: user,
-    }).$returningId();
+    }).returning({ id: s.warehouseLotDetails.id });
 
     // aktualizacja stanu partii (ADAPT: warehouse_lots.qty)
     if (input.lotId) {
@@ -304,7 +304,7 @@ export async function generateAIAnalysis(input: WarehouseAiAnalysisInput) {
     rotationScore, predictedStockoutDate,
     recommendedOrderQty: recommendedOrderQty.toFixed(2), recommendedOrderDate,
     bestSupplierId: bestSupplier?.id ?? null,
-  }).$returningId();
+  }).returning({ id: s.warehouseStockItems.id });
 
   return {
     id, productId: product.id, productName: product.name,
@@ -334,7 +334,7 @@ export async function createAlert(input: WarehouseAlertCreate) {
     productId: input.productId ?? null, lotId: input.lotId ?? null,
     warehouseId: input.warehouseId ?? null,
     message: input.message, details: input.details ?? null,
-  }).$returningId();
+  }).returning({ id: s.warehouseAlerts.id });
   return { id };
 }
 

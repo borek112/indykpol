@@ -95,7 +95,7 @@ function buildModule(modKey: ModuleKey) {
           data.companyId = await resolveDefaultCompanyId(ctx.user?.companyId ?? null);
         }
         if (hasUpdatedBy) data.updatedBy = input.author;
-        const [{ id }] = await db.insert(table as any).values(data).$returningId();
+        const [{ id }] = await db.insert(table as any).values(data).returning({ id: (table as any).id });
         await audit((table as any)[Symbol.for("drizzle:Name")] ?? modKey, id, "create", { newValues: data, author: input.author });
         const row = await db.select().from(table as any).where(eq((cols as any).id, id));
         return row[0];
@@ -156,7 +156,7 @@ export const notificationsRouter = createRouter({
   push: authedQuery
     .input(z.object({ severity: z.enum(["info", "warning", "critical"]).default("info"), title: z.string(), body: z.string().optional(), link: z.string().optional() }))
     .mutation(async ({ input }) => {
-      const [{ id }] = await getDb().insert(s.notifications).values(input).$returningId();
+      const [{ id }] = await getDb().insert(s.notifications).values(input).returning({ id: s.notifications.id });
       return { id };
     }),
 });

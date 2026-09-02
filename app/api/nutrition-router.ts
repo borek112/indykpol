@@ -467,7 +467,7 @@ export const nutritionRouter = createRouter({
         energyKcal: Math.round(p.energy), lysinePct: p.lysine.toFixed(3), explanation,
         author: input.author, sex: input.sex, season: input.season,
         genetics: input.genetics ?? null, status: input.status,
-      }).$returningId();
+      }).returning({ id: s.recipes.id });
       for (const m of items) {
         await db.insert(s.recipeItems).values({ recipeId: id, ingredientId: m.ing.id, percent: m.percent.toFixed(2) });
       }
@@ -542,7 +542,7 @@ export const nutritionRouter = createRouter({
               fiberPct: String(ing.fiberPct ?? 0), fatPct: String(ing.fatPct ?? 0),
               calciumPct: String(ing.calciumPct ?? 0), phosphorusPct: String(ing.phosphorusPct ?? 0),
               pricePerTon: String(ing.pricePerTon ?? 0), stockTons: String(ing.stockTons ?? 0),
-            }).$returningId();
+            }).returning({ id: s.recipeItems.id });
             byName.set(key, { ...ing, id } as any);
             report.ingredientsAdded++;
           } catch (e: any) { report.errors.push(`Surowiec „${ing?.name}": ${e.message.slice(0, 80)}`); }
@@ -571,7 +571,7 @@ export const nutritionRouter = createRouter({
               costPerTon: String(r.costPerTon ?? 0), proteinPct: String(r.proteinPct ?? 0),
               energyKcal: Number(r.energyKcal ?? 0), lysinePct: String(r.lysinePct ?? 0),
               explanation: r.explanation ? String(r.explanation).slice(0, 2000) : "Receptura importowana.",
-            }).$returningId();
+            }).returning({ id: s.recipes.id });
             let added = 0;
             for (const it of r.items ?? []) {
               const src = oldIdToIng.get(Number(it.ingredientId));
