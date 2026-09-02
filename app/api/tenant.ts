@@ -3,6 +3,11 @@ import * as schema from "@db/schema";
 import type { ContextUser } from "./context";
 import { getDb } from "./queries/connection";
 import { TRPCError } from "@trpc/server";
+import { env } from "./lib/env";
+
+export function isDemoContext(user: ContextUser): boolean {
+  return env.demoMode && user.unionId === "demo";
+}
 
 export function requireTenantCompany(user: ContextUser): number {
   if (!user.companyId) {
@@ -12,6 +17,7 @@ export function requireTenantCompany(user: ContextUser): number {
 }
 
 export function requireRequestedCompany(user: ContextUser, requestedCompanyId: number): number {
+  if (isDemoContext(user)) return requestedCompanyId;
   const companyId = requireTenantCompany(user);
   if (requestedCompanyId !== companyId) {
     throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: company is not assigned to this user." });
@@ -21,8 +27,10 @@ export function requireRequestedCompany(user: ContextUser, requestedCompanyId: n
 
 export async function requireFarmTenant(user: ContextUser, farmId: number) {
   const companyId = requireTenantCompany(user);
-  const [farm] = await getDb().select().from(schema.farms)
-    .where(and(eq(schema.farms.id, farmId), eq(schema.farms.companyId, companyId))).limit(1);
+  const query = getDb().select().from(schema.farms).where(isDemoContext(user)
+    ? eq(schema.farms.id, farmId)
+    : and(eq(schema.farms.id, farmId), eq(schema.farms.companyId, companyId)));
+  const [farm] = await query.limit(1);
   if (!farm) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: farm is not owned by your company." });
   return farm;
 }
@@ -31,7 +39,9 @@ export async function requireHouseTenant(user: ContextUser, houseId: number) {
   const companyId = requireTenantCompany(user);
   const rows = await getDb().select({ house: schema.houses, farm: schema.farms })
     .from(schema.houses).innerJoin(schema.farms, eq(schema.houses.farmId, schema.farms.id))
-    .where(and(eq(schema.houses.id, houseId), eq(schema.farms.companyId, companyId))).limit(1);
+    .where(isDemoContext(user)
+      ? eq(schema.houses.id, houseId)
+      : and(eq(schema.houses.id, houseId), eq(schema.farms.companyId, companyId))).limit(1);
   const row = rows.at(0);
   if (!row) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: house is not owned by your company." });
   return row;
@@ -44,7 +54,9 @@ export async function requireBatchTenant(user: ContextUser, batchId: number) {
     .from(schema.batches)
     .innerJoin(schema.houses, eq(schema.batches.houseId, schema.houses.id))
     .innerJoin(schema.farms, eq(schema.houses.farmId, schema.farms.id))
-    .where(and(eq(schema.batches.id, batchId), eq(schema.farms.companyId, companyId)))
+    .where(isDemoContext(user)
+      ? eq(schema.batches.id, batchId)
+      : and(eq(schema.batches.id, batchId), eq(schema.farms.companyId, companyId)))
     .limit(1);
   const row = rows.at(0);
   if (!row) throw new TRPCError({ code: "FORBIDDEN", message: "TENANT_MISMATCH: batch is not owned by your company." });

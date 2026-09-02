@@ -19,7 +19,6 @@ import CommandCenter from "./pages/CommandCenter";
 import Editions from "./pages/Editions";
 import Coverage from "./pages/Coverage";
 import Integrations from "./pages/Integrations";
-import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import DevAuthGate from "./components/DevAuthGate";
 
@@ -29,7 +28,6 @@ export default function App() {
   return (
     <DevAuthGate>
     <Routes>
-      <Route path="/login" element={<Login />} />
       <Route path="/" element={L(<Dashboard />)} />
       <Route path="/centrum-decyzji" element={L(<CommandCenter />)} />
       <Route path="/struktura" element={L(<Structure />)} />

@@ -36,6 +36,11 @@ In Netlify: **Site configuration → Environment variables → Add a variable**:
 VITE_API_URL=https://twoj-backend.example.com/api/trpc
 ```
 
+For the public Netlify DEMO configured in this repository, leave
+`VITE_API_URL` unset: the frontend uses the `/api/*` proxy and the build sets
+`VITE_DEMO_MODE=true`. This keeps the browser on one public Netlify URL while
+the API remains on Render.
+
 Wartość musi wskazywać dokładnie endpoint tRPC:
 
 ```text
@@ -67,7 +72,9 @@ CORS_ORIGIN=https://twoj-site.netlify.app
 SEED_DEMO=true   # tylko przy pierwszym uruchomieniu
 ```
 
-After the first successful deployment, set `SEED_DEMO=false` and redeploy.
+When `SEED_DEMO=true`, startup seeds only an empty DEMO tenant. Once the demo
+company has farms, houses and batches, later restarts skip seeding so records
+added in the application are retained.
 
 ## 4. Database
 

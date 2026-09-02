@@ -15,6 +15,7 @@ const inputCls =
   "w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-red-500";
 
 type FormState =
+  | { kind: "company" }
   | { kind: "farm"; companyId: number }
   | { kind: "house"; farmId: number }
   | { kind: "batch"; houseId: number }
@@ -24,7 +25,7 @@ type FormState =
   | null;
 
 export default function Structure() {
-  const structure = trpc.org.structure.useQuery();
+  const structure = trpc.org.structure.useQuery(companyId ? { companyId } : undefined);
   const companies = trpc.org.companies.useQuery();
   const utils = trpc.useUtils();
   const inv = () => utils.org.structure.invalidate();
@@ -36,6 +37,7 @@ export default function Structure() {
   const archiveHouse = trpc.org.archiveHouse.useMutation({ onSuccess: inv });
   const createBatch = trpc.org.createBatch.useMutation({ onSuccess: inv });
   const createLine = trpc.org.createGeneticLine.useMutation({ onSuccess: inv });
+  const createCompany = trpc.org.createCompany.useMutation({ onSuccess: async (created) => { await utils.org.companies.invalidate(); setCompanyId(created.id); } });
 
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -52,6 +54,7 @@ export default function Structure() {
     initialCount: 10000, startDate: new Date().toISOString().slice(0, 10), chickSupplier: "", chickPrice: 1.6,
   });
   const [lineForm, setLineForm] = useState({ name: "", supplier: "" });
+  const [companyForm, setCompanyForm] = useState({ name: "", countryCode: "PL", baseCurrency: "EUR" });
 
   return (
     <div className="space-y-6">
@@ -70,6 +73,9 @@ export default function Structure() {
               <option key={c.id} value={c.id}>{countryFlag(c.countryCode)} {c.name}</option>
             ))}
           </select>
+          <button onClick={() => setForm({ kind: "company" })} className="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-800">
+            <Plus className="mr-1 inline h-4 w-4" /> Firma
+          </button>
           <button
             onClick={() => setForm({ kind: "farm", companyId: activeCompanyId })}
             className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500"
@@ -78,6 +84,21 @@ export default function Structure() {
           </button>
         </div>
       </div>
+
+      {form?.kind === "company" && (
+        <div className="rounded-xl border border-red-900/50 bg-zinc-900 p-5">
+          <h3 className="mb-4 font-semibold">Dodaj firmę</h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Nazwa"><input className={inputCls} value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} /></Field>
+            <Field label="Kraj"><input className={inputCls} maxLength={2} value={companyForm.countryCode} onChange={(e) => setCompanyForm({ ...companyForm, countryCode: e.target.value.toUpperCase() })} /></Field>
+            <Field label="Waluta"><input className={inputCls} maxLength={3} value={companyForm.baseCurrency} onChange={(e) => setCompanyForm({ ...companyForm, baseCurrency: e.target.value.toUpperCase() })} /></Field>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button disabled={createCompany.isPending || companyForm.name.trim().length < 2} onClick={() => { createCompany.mutate(companyForm); setForm(null); }} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium hover:bg-red-500 disabled:opacity-50">Zapisz firmę</button>
+            <button onClick={() => setForm(null)} className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">Anuluj</button>
+          </div>
+        </div>
+      )}
 
       {form?.kind === "farm" && (
         <div className="rounded-xl border border-red-900/50 bg-zinc-900 p-5">

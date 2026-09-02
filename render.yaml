@@ -2,13 +2,12 @@ services:
   - type: web
     name: indykpol-api
     runtime: docker
+    branch: main
+    rootDir: app
     dockerfilePath: ./Dockerfile.production
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
-      - key: DATABASE_URL
-        sync: false          # wklej connection string MySQL w panelu Render
-      - key: JWT_SECRET
-        generateValue: true
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -21,10 +20,14 @@ services:
         value: https://indykpol-demo.netlify.app
       - key: CORS_ORIGIN
         value: https://indykpol-demo.netlify.app
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: SEED_DEMO
+        value: "true"
       - key: UPLOAD_DIR
         value: /data/uploads
-      - key: SEED_DEMO
-        value: "true"        # ustaw "false" po pierwszym wdrożeniu
     disk:
       name: uploads
       mountPath: /data

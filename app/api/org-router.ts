@@ -5,7 +5,7 @@ import { getDb } from "./queries/connection";
 import * as s from "@db/schema";
 import { eq, and, ne, desc } from "drizzle-orm";
 import { audit } from "./audit";
-import { requireBatchTenant, requireFarmTenant, requireHouseTenant, requireRequestedCompany, requireTenantCompany } from "./tenant";
+import { isDemoContext, requireBatchTenant, requireFarmTenant, requireHouseTenant, requireRequestedCompany, requireTenantCompany } from "./tenant";
 
 /* Harmonogram domyślny — Workflow Engine */
 export async function generateSchedule(batchId: number, startDate: string, sex: "toms" | "hens" | "mixed") {
@@ -49,13 +49,23 @@ export const orgRouter = createRouter({
   /* ------- firmy / tryb ------- */
   companies: authedQuery.query(async ({ ctx }) => {
     const companyId = requireTenantCompany(ctx.user!);
-    return getDb().select().from(s.companies).where(and(eq(s.companies.id, companyId), ne(s.companies.status, "archived")));
+    const companies = await getDb().select().from(s.companies).where(ne(s.companies.status, "archived"));
+    return isDemoContext(ctx.user!) ? companies : companies.filter((company) => company.id === companyId);
   }),
 
   createCompany: authedQuery
     .input(z.object({ name: z.string().min(2), countryCode: z.string().length(2), baseCurrency: z.string().length(3).default("EUR") }))
-    .mutation(async () => {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Firma jest przypisywana podczas rejestracji konta. Tworzenie dodatkowych tenantów nie jest dostępne w tym widoku." });
+    .mutation(async ({ input, ctx }) => {
+      if (!isDemoContext(ctx.user!)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Firma jest przypisywana podczas rejestracji konta. Tworzenie dodatkowych tenantów nie jest dostępne w tym widoku." });
+      }
+      const [{ id }] = await getDb().insert(s.companies).values({
+        name: input.name,
+        countryCode: input.countryCode.toUpperCase(),
+        baseCurrency: input.baseCurrency.toUpperCase(),
+      }).$returningId();
+      await audit("companies", id, "create", { newValues: input, author: "demo" });
+      return { id };
     }),
 
   /* ------- linie genetyczne ------- */
@@ -79,8 +89,9 @@ export const orgRouter = createRouter({
   /* ------- struktura ------- */
   structure: authedQuery
     .input(z.object({ companyId: z.number() }).optional())
-    .query(async ({ ctx }) => {
-      const companyId = requireTenantCompany(ctx.user!);
+    .query(async ({ input, ctx }) => {
+      const companyId = input?.companyId ?? requireTenantCompany(ctx.user!);
+      requireRequestedCompany(ctx.user!, companyId);
       const db = getDb();
       const companies = await db.select().from(s.companies).where(and(eq(s.companies.id, companyId), ne(s.companies.status, "archived")));
       const farmRows = await db.select().from(s.farms).where(and(eq(s.farms.companyId, companyId), ne(s.farms.status, "archived")));
