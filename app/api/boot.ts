@@ -88,6 +88,7 @@ if (!env.isProduction) {
   app.get("/api/dev-login", async (c) => {
     const { getDb } = await import("./queries/connection");
     const { companies } = await import("@db/schema");
+    const { eq } = await import("drizzle-orm");
     const db = getDb();
     const [company] = env.demoCompanyId
       ? await db.select().from(companies).where(eq(companies.id, env.demoCompanyId)).limit(1)
