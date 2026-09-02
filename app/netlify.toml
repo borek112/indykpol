@@ -1,24 +1,25 @@
-# Netlify — hosting statycznego frontendu
-# UWAGA: Netlify NIE uruchomi backendu ani bazy MySQL.
-# Backend wystaw osobno (Railway/Render) i ustaw jego adres w zmiennej VITE_API_URL.
+# Netlify — frontend statyczny + backend serverless (Netlify Functions)
 
 [build]
   command = "npm install --legacy-peer-deps && npx vite build"
   publish = "dist/public"
 
-[build.environment]
-  # Adres API backendu, np. https://bloody-turkey.up.railway.app/api/trpc
-  # Ustaw wygodniej w panelu: Site settings → Environment variables
-  # VITE_API_URL = "https://bloody-turkey.up.railway.app/api/trpc"
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
-# Proxy API do Railway backendu (najpierw przed regułą SPA).
 [[redirects]]
   from = "/api/*"
-  to = "https://indykpol-production.up.railway.app/api/:splat"
+  to = "/.netlify/functions/trpc/api/:splat"
   status = 200
   force = true
 
-# SPA — wszystkie ścieżki kieruj do index.html (routing po stronie Reacta)
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/trpc/health"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

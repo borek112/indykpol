@@ -1,4 +1,6 @@
 import { eq } from "drizzle-orm";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getDb } from "../api/queries/connection";
 import * as schema from "./schema";
 import { generateSchedule } from "../api/org-router";
@@ -43,9 +45,8 @@ const BASE_INGREDIENTS = [
 ];
 
 const COMPANIES = [
-  { name: "Bloody Turkey Group S.A. (Demo)", cc: "PL" },
-  { name: "Indykpol S.A.", cc: "PL" },
-  { name: "Gospodarstwo Kowalski", cc: "PL" },
+  { name: "demo-company-1", cc: "PL" },
+  { name: "demo-company-2", cc: "PL" },
 ];
 
 const FARMS: Array<{
@@ -62,7 +63,6 @@ const FARMS: Array<{
   { company: 0, name: "Turkey Farm Yorkshire", cc: "GB", city: "York", lat: 53.959, lng: -1.081, cap: 55000 },
   { company: 1, name: "Ferma Olsztyńska 1", cc: "PL", city: "Olsztynek", lat: 53.583, lng: 20.285, cap: 140000 },
   { company: 1, name: "Ferma Lubawska", cc: "PL", city: "Lubawa", lat: 53.504, lng: 19.749, cap: 88000 },
-  { company: 2, name: "Kowalski — kurniki rodzinne", cc: "PL", city: "Żuromin", lat: 53.064, lng: 19.909, cap: 18000 },
 ];
 
 const LINES = ["BUT Big 6", "Hybrid Converter", "Aviagen Nicholas 700", "Hendrix XL"];
@@ -146,7 +146,7 @@ async function seedBaseIngredients() {
   console.log("Seed podstawowych surowców: OK");
 }
 
-async function seed() {
+export async function seedDatabase() {
   const db = getDb();
 
   if (process.env.SEED_FORCE_RESET === "true") {
@@ -161,6 +161,15 @@ async function seed() {
     for (const t of tables) await db.delete(t);
   } else {
     console.log("Tryb bezpieczny: bez resetu danych, tylko seed dodatków i zbiorów demo");
+    const [existingCompany] = await db
+      .select({ id: schema.companies.id })
+      .from(schema.companies)
+      .where(eq(schema.companies.name, "demo-company-1"))
+      .limit(1);
+    if (existingCompany) {
+      console.log("Dane już istnieją — pomijam ponowny seed demo.");
+      return;
+    }
   }
 
   await seedBaseIngredients();
@@ -175,9 +184,9 @@ async function seed() {
   }
 
   console.log("Linie genetyczne...");
-  const lineIds: number[][] = [[], [], []];
+  const lineIds: number[][] = companyIds.map(() => []);
   for (let ci = 0; ci < companyIds.length; ci++) {
-    for (const l of LINES.slice(0, ci === 2 ? 2 : 4)) {
+    for (const l of LINES.slice(0, 4)) {
       const [{ id }] = await db.insert(schema.geneticLines)
         .values({ companyId: companyIds[ci], name: l, supplier: pick(SUPPLIERS) }).$returningId();
       lineIds[ci].push(id);
@@ -201,6 +210,8 @@ async function seed() {
   let batchSeq = 0;
   let demoTransferSource = 0;
   const finisherHouseIds: number[] = [];
+  const houseIds: number[] = [];
+  const batchIds: number[] = [];
 
   for (const f of FARMS) {
     const companyId = companyIds[f.company];
@@ -218,7 +229,7 @@ async function seed() {
       });
     }
 
-    const houseCount = f.company === 2 ? 2 : ri(3, 4);
+    const houseCount = ri(2, 4);
     for (let h = 1; h <= houseCount; h++) {
       const isBrooder = h === 1;
       const area = isBrooder ? ri(600, 900) : ri(1500, 2400);
@@ -227,6 +238,7 @@ async function seed() {
         houseType: isBrooder ? "brooder" : "finisher",
         areaM2: area.toFixed(1), maxDensityKgM2: isBrooder ? "25.0" : "42.0",
       }).$returningId();
+      houseIds.push(houseId);
       if (!isBrooder) finisherHouseIds.push(houseId);
 
       // sektory dla kurników
@@ -270,6 +282,7 @@ async function seed() {
           initialCount: initial, currentCount: current, soldCount: sold,
           status: closed ? "closed" : "active",
         }).$returningId();
+        batchIds.push(batchId);
         await db.insert(schema.auditLog).values({ tableName: "batches", recordId: batchId, action: "create", newValues: { initialCount: initial }, author: "seed" });
 
         // Workflow Engine — pełny harmonogram
@@ -441,19 +454,158 @@ async function seed() {
       items: [{ id: grain, pct: 46 }, { id: corn, pct: 18 }, { id: sbm, pct: 18 }, { id: rapeseed, pct: 6 }, { id: oil, pct: 6 }, { id: lys, pct: 0.3 }, { id: met, pct: 0.28 }, { id: lime, pct: 1.6 }, { id: premix, pct: 2.5 }],
     },
   ];
-  for (const r of RECIPES) {
-    const [{ id: rid }] = await db.insert(schema.recipes).values({
-      companyId: companyIds[0], name: r.name, ageGroup: r.age, strategy: r.strat,
-      costPerTon: r.cost.toFixed(2), proteinPct: r.protein.toFixed(2),
-      energyKcal: r.energy, lysinePct: r.lys.toFixed(3), explanation: r.expl,
-    }).$returningId();
-    for (const it of r.items) {
-      await db.insert(schema.recipeItems).values({ recipeId: rid, ingredientId: it.id, percent: it.pct.toFixed(2) });
+  const recipeIdsByCompany = new Map<number, number[]>();
+  for (const companyId of companyIds) {
+    const companyRecipeIds: number[] = [];
+    for (const r of RECIPES) {
+      const [{ id: rid }] = await db.insert(schema.recipes).values({
+        companyId, name: r.name, ageGroup: r.age, strategy: r.strat,
+        costPerTon: r.cost.toFixed(2), proteinPct: r.protein.toFixed(2),
+        energyKcal: r.energy, lysinePct: r.lys.toFixed(3), explanation: r.expl,
+      }).$returningId();
+      companyRecipeIds.push(rid);
+      for (const it of r.items) {
+        await db.insert(schema.recipeItems).values({ recipeId: rid, ingredientId: it.id, percent: it.pct.toFixed(2) });
+      }
+    }
+    recipeIdsByCompany.set(companyId, companyRecipeIds);
+  }
+
+  console.log("Normy i programy żywieniowe...");
+  const nutritionStages = [
+    { name: "starter", dayFrom: 0, dayTo: 28, ageGroup: 1, energyKcal: 2870, proteinPct: 27.2, lysinePct: 1.62, methioninePct: 0.59, threoninePct: 0.94, calciumPct: 1.05, phosphorusPct: 0.52, sodiumPct: 0.20 },
+    { name: "grower", dayFrom: 29, dayTo: 63, ageGroup: 2, energyKcal: 3030, proteinPct: 24.8, lysinePct: 1.48, methioninePct: 0.56, threoninePct: 0.88, calciumPct: 0.95, phosphorusPct: 0.48, sodiumPct: 0.19 },
+    { name: "finisher", dayFrom: 64, dayTo: 112, ageGroup: 3, energyKcal: 3180, proteinPct: 20.1, lysinePct: 1.12, methioninePct: 0.45, threoninePct: 0.76, calciumPct: 0.82, phosphorusPct: 0.41, sodiumPct: 0.17 },
+  ] as const;
+  const sexes = ["toms", "hens", "mixed"] as const;
+
+  for (const companyId of companyIds) {
+    for (const sex of sexes) {
+      for (const stage of nutritionStages) {
+        await db.insert(schema.dietRequirements).values({
+          companyId,
+          name: `${sex.toUpperCase()} ${stage.name}`,
+          code: `${sex}-${stage.name}`,
+          gender: sex,
+          ageGroup: stage.ageGroup,
+          ageFromDays: stage.dayFrom,
+          ageToDays: stage.dayTo,
+          targetWeightKg: (sex === "toms" ? stage.ageGroup * 4.2 : sex === "hens" ? stage.ageGroup * 2.5 : stage.ageGroup * 3.4).toFixed(3),
+          energyKcal: stage.energyKcal,
+          proteinPct: stage.proteinPct.toFixed(2),
+          lysinePct: stage.lysinePct.toFixed(3),
+          methioninePct: stage.methioninePct.toFixed(3),
+          threoninePct: stage.threoninePct.toFixed(3),
+          calciumPct: stage.calciumPct.toFixed(2),
+          phosphorusPct: stage.phosphorusPct.toFixed(2),
+          sodiumPct: stage.sodiumPct.toFixed(3),
+          sourceReference: "Demo requirements",
+        });
+      }
+
+      const [{ id: programId }] = await db.insert(schema.feedPrograms).values({
+        companyId,
+        name: `Program ${sex} demo`,
+        sex,
+      }).$returningId();
+      const companyRecipeIds = recipeIdsByCompany.get(companyId) ?? [];
+      for (let i = 0; i < nutritionStages.length; i++) {
+        const stage = nutritionStages[i];
+        await db.insert(schema.feedProgramStages).values({
+          programId,
+          name: stage.name,
+          dayFrom: stage.dayFrom,
+          dayTo: stage.dayTo,
+          recipeId: companyRecipeIds[i] ?? null,
+          proteinTargetPct: stage.proteinPct.toFixed(2),
+          energyTargetKcal: stage.energyKcal,
+          feedPerBirdG: ri(42, 205),
+        });
+      }
     }
   }
 
-  console.log(`Gotowe: firmy=${COMPANIES.length}, fermy=${FARMS.length}, rzuty=${batchSeq}`);
-  process.exit(0);
+  console.log("Klimat i prognozy AI...");
+  for (const houseId of houseIds) {
+    for (let day = 0; day < 30; day++) {
+      await db.insert(schema.climateLogs).values({
+        houseId,
+        ts: daysAgo(day),
+        tempC: rf(18.5, 27.8).toFixed(1),
+        humidityPct: rf(50, 72).toFixed(1),
+        co2Ppm: ri(950, 1950),
+        ammoniaPpm: rf(4, 16).toFixed(1),
+        ventilationPct: ri(35, 92),
+        source: "seed-sim",
+      });
+    }
+  }
+
+  for (const batchId of batchIds) {
+    const weeklyForecasts = Array.from({ length: 5 }).map((_, i) => ({
+      week: i + 1,
+      ageDays: (i + 1) * 7,
+      weightKg: Number(rf(1.0 + i * 1.1, 2.2 + i * 1.2).toFixed(2)),
+      feedConsumptionKg: Number(rf(1.6 + i * 1.2, 2.5 + i * 1.5).toFixed(2)),
+      fcr: Number(rf(2.15, 2.75).toFixed(3)),
+      mortalityPct: Number(rf(0.12, 0.52).toFixed(2)),
+    }));
+
+    const predictedFcr = rf(2.2, 2.7);
+    const predictedMargin = rf(8.5, 18.5);
+    const predictedFeedTons = rf(95, 360);
+    const predictedFeedCost = predictedFeedTons * rf(330, 390);
+    await db.insert(schema.batchForecasts).values({
+      batchId,
+      weeklyForecasts,
+      predictedFcr: predictedFcr.toFixed(3),
+      predictedAdg: rf(0.085, 0.165).toFixed(3),
+      predictedEpef: rf(265, 385).toFixed(3),
+      predictedMortalityPct: rf(1.2, 4.4).toFixed(2),
+      predictedFeedTons: predictedFeedTons.toFixed(3),
+      predictedFeedCost: predictedFeedCost.toFixed(2),
+      predictedMargin: predictedMargin.toFixed(2),
+      assumptions: ["stabilna pasza", "brak zmian genetyki", "normalny profil klimatu"],
+      confidenceIntervals: { fcr: { low: 2.1, high: 2.9 }, adg: { low: 0.08, high: 0.17 } },
+    });
+
+    const predictedRevenue = rf(180000, 430000);
+    const totalCost = predictedRevenue * rf(0.76, 0.91);
+    await db.insert(schema.productionForecasts).values({
+      batchId,
+      predictedFinalWeight: rf(10250, 20120).toFixed(1),
+      predictedFcr: predictedFcr.toFixed(3),
+      predictedEpef: rf(255, 392).toFixed(2),
+      totalFeedConsumptionKg: (predictedFeedTons * 1000).toFixed(1),
+      totalCost: totalCost.toFixed(2),
+      predictedRevenue: predictedRevenue.toFixed(2),
+      predictedProfit: (predictedRevenue - totalCost).toFixed(2),
+      predictedMargin: predictedMargin.toFixed(2),
+      accuracyPercent: rf(84, 96).toFixed(1),
+    });
+
+    await db.insert(schema.aiAdvisorLogs).values({
+      batchId,
+      symptoms: ["lekki wzrost wilgotności", "spadek pobrania paszy"],
+      inputData: { source: "seed", model: "demo-health-v1" },
+      recommendations: [
+        { title: "Korekta wentylacji nocnej", priority: "high", expectedImpact: "obniżenie NH3 o 12-18%" },
+        { title: "Kontrola linii pojenia", priority: "medium", expectedImpact: "stabilizacja FCR w 72h" },
+      ],
+      confidence: rf(0.72, 0.95).toFixed(3),
+      veterinarian: pick(VETS),
+    });
+  }
+
+  console.log(`Gotowe: firmy=${COMPANIES.length}, fermy=${FARMS.length}, domy=${houseIds.length}, rzuty=${batchSeq}`);
 }
 
-seed();
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectRun) {
+  seedDatabase()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("Seed nieudany:", err);
+      process.exit(1);
+    });
+}
