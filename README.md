@@ -68,6 +68,7 @@ Important:
 - the app is designed for a single project architecture and does not create a separate parallel system
 - demo/full mode is available in the UI
 - ERP create flows include a default company fallback to avoid broken inserts
+- in `Struktura` you can create your own company and auto-generate starter data (farm + house + first batch)
 
 ## License
 

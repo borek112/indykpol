@@ -129,3 +129,4 @@ http://127.0.0.1:4173
 - Frontend site is static only.
 - API and DB must be hosted separately.
 - Do not expose the database to the public internet.
+- Po zalogowaniu możesz utworzyć własną firmę w widoku `Struktura`; opcja seed doda dane startowe (ferma/kurnik/rzut).
